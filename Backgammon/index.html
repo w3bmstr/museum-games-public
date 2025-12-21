@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Backgammon – Solo or 2P</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: radial-gradient(circle at 20% 20%, #1b1b1b, #0d0d0d 60%);
+    color: #eee;
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    overflow: hidden;
+  }
+  #ui {
+    position: fixed;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 4;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    padding: 8px 14px;
+    background: rgba(12, 12, 12, 0.9);
+    border-radius: 999px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.06);
+    font-size: 13px;
+    backdrop-filter: blur(6px);
+  }
+  #ui button {
+    border: none;
+    padding: 7px 12px;
+    border-radius: 999px;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 13px;
+    color: #fff;
+    background: linear-gradient(135deg, #3ba270, #55c08a);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+  }
+  #btnReset { background: #3c3c3c; }
+  #btnRoll:disabled { opacity: 0.35; cursor: default; }
+  #msgText { min-width: 160px; text-align: left; color: #ffd166; font-weight: 600; }
+  canvas { display: block; width: 100vw; height: 100vh; cursor: pointer; }
+
+  .overlay {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.65);
+    backdrop-filter: blur(6px);
+    z-index: 10;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 200ms ease;
+  }
+  .overlay.show {
+    opacity: 1;
+    pointer-events: all;
+  }
+  .panel {
+    width: min(520px, 92vw);
+    background: #111;
+    border-radius: 18px;
+    padding: 20px;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.06);
+  }
+  .panel h1 { margin: 0 0 10px; letter-spacing: 0.5px; }
+  .panel p { margin: 4px 0; color: #cfcfcf; font-size: 14px; line-height: 1.4; }
+  .grid { display: grid; gap: 10px; }
+  .grid.two { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+  .btn-pill {
+    border: 1px solid rgba(255,255,255,0.08);
+    background: linear-gradient(135deg, #1c1c1c, #0f0f0f);
+    border-radius: 12px;
+    padding: 12px;
+    color: #eee;
+    cursor: pointer;
+    text-align: center;
+    font-weight: 700;
+    transition: 120ms ease;
+  }
+  .btn-pill.active {
+    border-color: #5be59d;
+    box-shadow: 0 0 0 1px #5be59d inset;
+  }
+  .btn-start {
+    width: 100%;
+    padding: 12px;
+    border: none;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #4caf50, #8bc34a);
+    color: #0d1f12;
+    font-weight: 800;
+    cursor: pointer;
+    margin-top: 10px;
+    font-size: 15px;
+  }
+  #rulesBtn { background: #2b2b2b; }
+  #modeText, #aiText { color: #9ad7ff; font-weight: 700; }
+</style>
+</head>
+<body>
+<div id="ui">
+  <span id="turnText">Turn: LIGHT</span>
+  <span id="diceText">Dice: --</span>
+  <span id="modeText">Mode: 2P</span>
+  <span id="aiText">AI: --</span>
+  <button id="btnRoll">Roll</button>
+  <button id="btnReset">New Game</button>
+  <button id="rulesBtn">Rules</button>
+  <span id="msgText"></span>
+</div>
+
+<div id="startOverlay" class="overlay show">
+  <div class="panel">
+    <h1>Backgammon</h1>
+    <p>Select how you want to play. Dice and moves are file-friendly (no server needed).</p>
+    <div class="grid two" style="margin-top: 8px;">
+      <div class="btn-pill active" id="modeLight">Play as LIGHT vs AI</div>
+      <div class="btn-pill" id="modeDark">Play as DARK vs AI</div>
+      <div class="btn-pill" id="modeTwo">Two Players (local)</div>
+    </div>
+    <p style="margin-top:12px; font-weight:700;">AI Difficulty</p>
+    <div class="grid two">
+      <div class="btn-pill" id="diffEasy">Easy</div>
+      <div class="btn-pill active" id="diffMed">Medium</div>
+      <div class="btn-pill" id="diffHard">Hard</div>
+    </div>
+    <button class="btn-start" id="startBtn">Start Game</button>
+    <p style="margin-top:10px; font-size:13px; color:#9ad7ff;">Controller: D-pad/Left Stick to move cursor, A/Enter to select/move, B/Esc to cancel, X/Space to roll. Keyboard: Arrow keys move cursor, Enter/Space select, R rolls, N new game, H toggles rules.</p>
+  </div>
+</div>
+
+<div id="rulesOverlay" class="overlay">
+  <div class="panel">
+    <h1>Rules</h1>
+    <p>Standard backgammon: light moves from point 23 to 0; dark from 0 to 23. Enter from the bar before any other move. A point with 2+ opponent checkers is blocked; a lone checker can be hit to the bar. When all of your checkers are in your home board (0..5 for light, 18..23 for dark), you may bear off exactly with a die or from the highest occupied point if overshooting.</p>
+    <p>Dice doubles give four moves. If both dice cannot be used, you must use the higher die; if only one die can be played, that is the move. The game auto-enforces using the maximum number of dice.</p>
+    <p>Win by bearing off all 15 checkers. UI shows legal targets after you select a source. Undo is not available.</p>
+    <button class="btn-start" id="closeRules">Close</button>
+  </div>
+</div>
+
+<canvas id="game"></canvas>
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+const turnText = document.getElementById("turnText");
+const diceText = document.getElementById("diceText");
+const msgText  = document.getElementById("msgText");
+const btnRoll  = document.getElementById("btnRoll");
+const btnReset = document.getElementById("btnReset");
+const btnRules = document.getElementById("rulesBtn");
+const modeText = document.getElementById("modeText");
+const aiText   = document.getElementById("aiText");
+const startOverlay = document.getElementById("startOverlay");
+const rulesOverlay = document.getElementById("rulesOverlay");
+const startBtn = document.getElementById("startBtn");
+const closeRules = document.getElementById("closeRules");
+const modeLight = document.getElementById("modeLight");
+const modeDark  = document.getElementById("modeDark");
+const modeTwo   = document.getElementById("modeTwo");
+const diffEasy  = document.getElementById("diffEasy");
+const diffMed   = document.getElementById("diffMed");
+const diffHard  = document.getElementById("diffHard");
+
+let gameMode = "light"; // light player is human
+let aiLevel = "medium";
+let humanControl = { 1: true, 2: false }; // default human as light
+let aiThinking = false;
+
+// Board representation
+let points = [];
+let bar = { 1:0, 2:0 };
+let borneOff = { 1:0, 2:0 };
+
+// game state
+let currentPlayer = 1;
+let dice = [];
+let originalDice = [];
+let selectedPoint = null;
+let legalTargets = [];
+let gameOver = false;
+let cursorIndex = 23; // keyboard/gamepad cursor over points 23..12,bar,11..0
+
+// layout
+let boardWidth, boardHeight, offsetX, offsetY;
+let pointWidth, pointHeight, barWidth;
+
+// ---------- INIT ----------
+function initPoints() {
+  points = new Array(24).fill(0).map(() => ({ color: 0, count: 0 }));
+  // Light
+  points[23] = { color: 1, count: 2 };
+  points[12] = { color: 1, count: 5 };
+  points[7]  = { color: 1, count: 3 };
+  points[5]  = { color: 1, count: 5 };
+  // Dark
+  points[0]  = { color: 2, count: 2 };
+  points[11] = { color: 2, count: 5 };
+  points[16] = { color: 2, count: 3 };
+  points[18] = { color: 2, count: 5 };
+
+  bar = { 1:0, 2:0 };
+  borneOff = { 1:0, 2:0 };
+  currentPlayer = 1;
+  dice = [];
+  originalDice = [];
+  selectedPoint = null;
+  legalTargets = [];
+  gameOver = false;
+  msgText.textContent = "";
+  cursorIndex = 23;
+  updateUI();
+}
+
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  const margin = 36;
+  boardWidth = canvas.width - margin * 2;
+  boardHeight = canvas.height - margin * 2;
+  offsetX = margin;
+  offsetY = margin;
+  barWidth = boardWidth * 0.06;
+  const usableWidth = boardWidth - barWidth;
+  pointWidth = usableWidth / 12;
+  pointHeight = boardHeight / 2;
+  draw();
+}
+window.addEventListener("resize", resize);
+
+// ---------- MODES ----------
+function setMode(mode) {
+  gameMode = mode;
+  if (mode === "light") humanControl = { 1: true, 2: false };
+  else if (mode === "dark") humanControl = { 1: false, 2: true };
+  else humanControl = { 1: true, 2: true };
+  updateUI();
+}
+function setDifficulty(level) { aiLevel = level; updateUI(); }
+function startGame() {
+  startOverlay.classList.remove("show");
+  initPoints();
+  draw();
+  maybeAutoTurn();
+}
+
+// ---------- DICE ----------
+function rollDice(force = false) {
+  if (gameOver) return;
+  if (!force && (!isHumanTurn() || dice.length > 0)) return;
+  const d1 = 1 + Math.floor(Math.random() * 6);
+  const d2 = 1 + Math.floor(Math.random() * 6);
+  dice = (d1 === d2) ? [d1, d1, d1, d1] : [d1, d2];
+  originalDice = dice.slice();
+  selectedPoint = null;
+  legalTargets = [];
+  updateUI();
+  computeAllLegalMoves();
+  if (legalTargets.length === 0) {
+    msgText.textContent = "No legal moves. Turn passes.";
+    setTimeout(() => { dice = []; endTurn(); }, 700);
+  } else {
+    msgText.textContent = "";
+  }
+  draw();
+}
+
+// ---------- UTILS ----------
+function directionFor(player) { return player === 1 ? -1 : 1; }
+function isInHomeBoard(player, idx) { return player === 1 ? (idx >= 0 && idx <= 5) : (idx >= 18 && idx <= 23); }
+function allInHome(player, state = null) {
+  const pts = state ? state.points : points;
+  const b = state ? state.bar : bar;
+  for (let i = 0; i < 24; i++) if (pts[i].color === player && !isInHomeBoard(player, i)) return false;
+  return b[player] === 0;
+}
+function indexToPosition(i) {
+  if (i >= 12) { const pos = i - 12; return { topRow: true, leftHalf: pos < 6, pos }; }
+  const pos = 11 - i; return { topRow: false, leftHalf: pos < 6, pos };
+}
+
+// ---------- LEGAL MOVES ----------
+function computeAllLegalMoves() {
+  legalTargets = [];
+  if (dice.length === 0) return;
+  if (bar[currentPlayer] > 0) {
+    for (let d of dice) getLegalTargetsFromBar(d, { points, bar }).forEach(t => legalTargets.push({ from: "bar", to: t, dieUsed: d }));
+    return;
+  }
+  for (let i = 0; i < 24; i++) if (points[i].color === currentPlayer && points[i].count > 0) {
+    for (let d of dice) getLegalTargetsFromPoint(i, d, { points, bar }).forEach(t => legalTargets.push({ from: i, to: t, dieUsed: d }));
+  }
+}
+
+function getLegalTargetsFromBar(die, state) {
+  let targetIndex = currentPlayer === 1 ? 24 - die : die - 1;
+  if (targetIndex < 0 || targetIndex > 23) return [];
+  const p = state.points[targetIndex];
+  if (p.color !== 0 && p.color !== currentPlayer && p.count > 1) return [];
+  return [targetIndex];
+}
+
+function getLegalTargetsFromPoint(from, die, state) {
+  const dir = directionFor(currentPlayer);
+  const rawTarget = from + dir * die;
+  const targets = [];
+  const pts = state.points;
+  if (allInHome(currentPlayer, state)) {
+    if (currentPlayer === 1) {
+      if (rawTarget < 0) {
+        let anyBehind = false; for (let i = from + 1; i <= 5; i++) if (pts[i].color === currentPlayer && pts[i].count > 0) { anyBehind = true; break; }
+        if (!anyBehind) targets.push("off");
+      } else if (rawTarget <= 23) {
+        const p = pts[rawTarget];
+        if (!(p.color !== 0 && p.color !== currentPlayer && p.count > 1)) targets.push(rawTarget);
+      }
+    } else {
+      if (rawTarget > 23) {
+        let anyBehind = false; for (let i = from - 1; i >= 18; i--) if (pts[i].color === currentPlayer && pts[i].count > 0) { anyBehind = true; break; }
+        if (!anyBehind) targets.push("off");
+      } else if (rawTarget >= 0) {
+        const p = pts[rawTarget];
+        if (!(p.color !== 0 && p.color !== currentPlayer && p.count > 1)) targets.push(rawTarget);
+      }
+    }
+  } else {
+    if (rawTarget < 0 || rawTarget > 23) return [];
+    const p = pts[rawTarget];
+    if (p.color !== 0 && p.color !== currentPlayer && p.count > 1) return [];
+    targets.push(rawTarget);
+  }
+  return targets;
+}
+
+// ---------- MOVE EXECUTION ----------
+function trySelectOrMove(pointIndexOrBar) {
+  if (gameOver || dice.length === 0 || aiThinking || !isHumanTurn()) return;
+  computeAllLegalMoves();
+  if (bar[currentPlayer] > 0 && pointIndexOrBar !== "bar") { msgText.textContent = "Must enter from bar."; return; }
+  if (pointIndexOrBar === "bar") {
+    if (bar[currentPlayer] === 0) return;
+    selectedPoint = "bar"; legalTargetsForSelected(); draw(); return;
+  } else if (typeof pointIndexOrBar === "number") {
+    const p = points[pointIndexOrBar];
+    if (p.color !== currentPlayer || p.count === 0) { if (selectedPoint !== null) tryMoveTo(pointIndexOrBar); return; }
+    selectedPoint = pointIndexOrBar; legalTargetsForSelected(); draw(); return;
+  }
+}
+
+function legalTargetsForSelected() { if (selectedPoint === null) { legalTargets = []; return; } computeAllLegalMoves(); legalTargets = legalTargets.filter(m => m.from === selectedPoint); }
+
+function tryMoveTo(dest) {
+  if (selectedPoint === null) return;
+  const match = legalTargets.find(m => m.to === dest);
+  if (!match) { if (dest === "off") { const offMatch = legalTargets.find(m => m.to === "off"); if (offMatch) performMove(offMatch); } return; }
+  performMove(match);
+}
+
+function performMove(move) {
+  const { from, to, dieUsed } = move;
+  const idx = dice.indexOf(dieUsed); if (idx !== -1) dice.splice(idx, 1);
+  if (from === "bar") bar[currentPlayer]--; else { points[from].count--; if (points[from].count === 0) points[from].color = 0; }
+  if (to === "off") borneOff[currentPlayer]++; else {
+    const p = points[to];
+    if (p.color !== 0 && p.color !== currentPlayer && p.count === 1) { const opponent = 3 - currentPlayer; bar[opponent]++; p.count = 0; p.color = 0; }
+    if (p.count === 0) { p.color = currentPlayer; p.count = 1; } else { p.count++; }
+  }
+  selectedPoint = null; legalTargets = []; updateUI();
+  if (borneOff[currentPlayer] === 15) { gameOver = true; msgText.textContent = (currentPlayer === 1 ? "LIGHT" : "DARK") + " wins!"; dice = []; draw(); aiThinking = false; return; }
+  if (dice.length > 0) { computeAllLegalMoves(); if (legalTargets.length === 0) { msgText.textContent = "No more legal moves. Turn passes."; dice = []; setTimeout(() => endTurn(), 600); } }
+  else endTurn();
+  draw();
+}
+
+function endTurn() {
+  if (gameOver) return;
+  currentPlayer = 3 - currentPlayer;
+  dice = [];
+  originalDice = [];
+  selectedPoint = null;
+  legalTargets = [];
+  aiThinking = false;
+  updateUI();
+  draw();
+  maybeAutoTurn();
+}
+
+// ---------- AI ----------
+function isAiTurn() { return !humanControl[currentPlayer]; }
+function isHumanTurn() { return humanControl[currentPlayer]; }
+
+function cloneState() { return { points: points.map(p => ({ color: p.color, count: p.count })), bar: { 1: bar[1], 2: bar[2] }, borneOff: { 1: borneOff[1], 2: borneOff[2] }, currentPlayer }; }
+function applyMoveSim(state, move) {
+  const player = state.currentPlayer;
+  const { from, to } = move;
+  if (from === "bar") state.bar[player]--; else { state.points[from].count--; if (state.points[from].count === 0) state.points[from].color = 0; }
+  if (to === "off") state.borneOff[player]++; else {
+    const p = state.points[to];
+    if (p.color !== 0 && p.color !== player && p.count === 1) { const opp = 3 - player; state.bar[opp]++; p.count = 0; p.color = 0; }
+    if (p.count === 0) { p.color = player; p.count = 1; } else { p.count++; }
+  }
+}
+
+function legalMovesForState(state, die) {
+  const player = state.currentPlayer;
+  const dir = player === 1 ? -1 : 1;
+  const moves = [];
+  if (state.bar[player] > 0) {
+    const targetIndex = player === 1 ? 24 - die : die - 1;
+    if (targetIndex >= 0 && targetIndex <= 23) {
+      const p = state.points[targetIndex];
+      if (!(p.color !== 0 && p.color !== player && p.count > 1)) moves.push({ from: "bar", to: targetIndex, dieUsed: die });
+    }
+    return moves;
+  }
+  const inHome = allInHome(player, state);
+  for (let i = 0; i < 24; i++) {
+    const p = state.points[i];
+    if (p.color !== player || p.count === 0) continue;
+    const rawTarget = i + dir * die;
+    if (inHome) {
+      if (player === 1) {
+        if (rawTarget < 0) {
+          let anyBehind = false; for (let j = i + 1; j <= 5; j++) if (state.points[j].color === player && state.points[j].count > 0) { anyBehind = true; break; }
+          if (!anyBehind) moves.push({ from: i, to: "off", dieUsed: die });
+        } else if (rawTarget <= 23) {
+          const tp = state.points[rawTarget];
+          if (!(tp.color !== 0 && tp.color !== player && tp.count > 1)) moves.push({ from: i, to: rawTarget, dieUsed: die });
+        }
+      } else {
+        if (rawTarget > 23) {
+          let anyBehind = false; for (let j = i - 1; j >= 18; j--) if (state.points[j].color === player && state.points[j].count > 0) { anyBehind = true; break; }
+          if (!anyBehind) moves.push({ from: i, to: "off", dieUsed: die });
+        } else if (rawTarget >= 0) {
+          const tp = state.points[rawTarget];
+          if (!(tp.color !== 0 && tp.color !== player && tp.count > 1)) moves.push({ from: i, to: rawTarget, dieUsed: die });
+        }
+      }
+    } else {
+      if (rawTarget < 0 || rawTarget > 23) continue;
+      const tp = state.points[rawTarget];
+      if (tp.color !== 0 && tp.color !== player && tp.count > 1) continue;
+      moves.push({ from: i, to: rawTarget, dieUsed: die });
+    }
+  }
+  return moves;
+}
+
+function generateSequences(state, diceList) {
+  if (diceList.length === 0) return [[]];
+  let sequences = [];
+  for (let i = 0; i < diceList.length; i++) {
+    const die = diceList[i];
+    const legals = legalMovesForState(state, die);
+    for (const mv of legals) {
+      const nextState = { points: state.points.map(p => ({ color: p.color, count: p.count })), bar: { 1: state.bar[1], 2: state.bar[2] }, borneOff: { 1: state.borneOff[1], 2: state.borneOff[2] }, currentPlayer: state.currentPlayer };
+      applyMoveSim(nextState, mv);
+      const nextDice = diceList.slice(); nextDice.splice(i, 1);
+      const subSeq = generateSequences(nextState, nextDice);
+      for (const tail of subSeq) sequences.push([mv, ...tail]);
+    }
+  }
+  if (sequences.length === 0) return [[]];
+  const maxLen = Math.max(...sequences.map(s => s.length));
+  sequences = sequences.filter(s => s.length === maxLen);
+  if (maxLen === 1 && diceList.length >= 2) {
+    const maxDie = Math.max(...diceList);
+    const filtered = sequences.filter(s => s[0] && s[0].dieUsed === maxDie);
+    if (filtered.length) sequences = filtered;
+  }
+  return sequences;
+}
+
+function pipCount(state, player) {
+  let sum = 0;
+  for (let i = 0; i < 24; i++) {
+    const p = state.points[i];
+    if (p.color !== player) continue;
+    const dist = player === 1 ? (i + 1) : (24 - i);
+    sum += dist * p.count;
+  }
+  sum += state.bar[player] * 25;
+  return sum;
+}
+
+function evaluateState(state, player) {
+  const opp = 3 - player;
+  const myPips = pipCount(state, player);
+  const oppPips = pipCount(state, opp);
+  return state.borneOff[player] * 60 - state.borneOff[opp] * 40 - myPips * 1.2 + oppPips * 0.8 + state.bar[opp] * 22 - state.bar[player] * 22;
+}
+
+function pickAiSequence(diceRoll) {
+  const seqs = generateSequences(cloneState(), diceRoll);
+  if (seqs.length === 0 || (seqs.length === 1 && seqs[0].length === 0)) return [];
+  const scored = seqs.map(seq => { const s = cloneState(); for (const mv of seq) applyMoveSim(s, mv); return { seq, score: evaluateState(s, currentPlayer) }; });
+  scored.sort((a,b) => b.score - a.score);
+  if (aiLevel === "easy") return scored[Math.floor(Math.random() * scored.length)].seq;
+  if (aiLevel === "medium") { const top = scored.slice(0, Math.max(1, Math.ceil(scored.length * 0.35))); return top[Math.floor(Math.random() * top.length)].seq; }
+  return scored[0].seq;
+}
+
+function aiTakeTurn() {
+  if (!isAiTurn() || gameOver) return;
+  aiThinking = true;
+  rollDice(true);
+  if (legalTargets.length === 0) { aiThinking = false; return; }
+  const planned = pickAiSequence(dice.slice());
+  if (!planned || planned.length === 0) { aiThinking = false; endTurn(); return; }
+  let idx = 0;
+  const step = () => {
+    if (idx >= planned.length || gameOver) { aiThinking = false; if (dice.length === 0) endTurn(); return; }
+    performMove(planned[idx]);
+    idx++;
+    if (dice.length === 0 || gameOver) { aiThinking = false; return; }
+    setTimeout(step, 260);
+  };
+  setTimeout(step, 260);
+}
+
+function maybeAutoTurn() { if (gameOver) return; if (isAiTurn()) setTimeout(aiTakeTurn, 320); }
+
+// ---------- DRAW ----------
+function drawBackground() { ctx.fillStyle = "#0b0b0b"; ctx.fillRect(0, 0, canvas.width, canvas.height); }
+function drawBoardSurface() {
+  const grad = ctx.createLinearGradient(offsetX, offsetY, offsetX + boardWidth, offsetY + boardHeight);
+  grad.addColorStop(0, "#4a2f1a"); grad.addColorStop(1, "#7b4b24");
+  ctx.fillStyle = grad; ctx.fillRect(offsetX, offsetY, boardWidth, boardHeight);
+  const barX = offsetX + (boardWidth - barWidth) / 2; ctx.fillStyle = "#2c1a0f"; ctx.fillRect(barX, offsetY, barWidth, boardHeight);
+}
+function drawPoints() {
+  const barX = offsetX + (boardWidth - barWidth) / 2;
+  for (let i = 0; i < 12; i++) {
+    const baseX = (i < 6) ? offsetX + i * pointWidth : barX + barWidth + (i - 6) * pointWidth;
+    const color = i % 2 === 0 ? "#f3d18a" : "#c98b3b";
+    ctx.beginPath(); ctx.moveTo(baseX, offsetY); ctx.lineTo(baseX + pointWidth, offsetY); ctx.lineTo(baseX + pointWidth / 2, offsetY + pointHeight * 0.9); ctx.closePath(); ctx.fillStyle = color; ctx.fill();
+  }
+  for (let i = 0; i < 12; i++) {
+    const baseX = (i < 6) ? offsetX + i * pointWidth : barX + barWidth + (i - 6) * pointWidth;
+    const color = i % 2 === 0 ? "#f3d18a" : "#c98b3b";
+    ctx.beginPath(); ctx.moveTo(baseX, offsetY + boardHeight); ctx.lineTo(baseX + pointWidth, offsetY + boardHeight); ctx.lineTo(baseX + pointWidth / 2, offsetY + boardHeight - pointHeight * 0.9); ctx.closePath(); ctx.fillStyle = color; ctx.fill();
+  }
+}
+function drawSingleChecker(cx, cy, r, color, highlight) {
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  let grad; if (color === 1) { grad = ctx.createRadialGradient(cx - r * 0.3, cy - r * 0.3, r * 0.2, cx, cy, r); grad.addColorStop(0, "#fff7d6"); grad.addColorStop(1, "#e0c173"); }
+  else { grad = ctx.createRadialGradient(cx - r * 0.3, cy - r * 0.3, r * 0.2, cx, cy, r); grad.addColorStop(0, "#fbe3d3"); grad.addColorStop(1, "#b3472b"); }
+  ctx.fillStyle = grad; ctx.fill(); ctx.strokeStyle = "rgba(0,0,0,0.55)"; ctx.lineWidth = 1; ctx.stroke();
+  if (highlight) { ctx.strokeStyle = "#00e5ff"; ctx.lineWidth = 2; ctx.stroke(); }
+}
+function drawCheckers() {
+  const checkerRadius = Math.min(pointWidth, pointHeight / 5) * 0.45;
+  const barX = offsetX + (boardWidth - barWidth) / 2;
+  function drawStack(pointIndex, isTop) {
+    const p = points[pointIndex]; if (p.count === 0) return;
+    let baseX;
+    if (pointIndex >= 12) { const i = pointIndex - 12; baseX = (i < 6) ? offsetX + i * pointWidth : barX + barWidth + (i - 6) * pointWidth; }
+    else { const i = 11 - pointIndex; baseX = (i < 6) ? offsetX + i * pointWidth : barX + barWidth + (i - 6) * pointWidth; }
+    for (let n = 0; n < p.count; n++) {
+      const cx = baseX + pointWidth / 2;
+      const cy = isTop ? offsetY + checkerRadius + n * (checkerRadius * 1.1) : offsetY + boardHeight - checkerRadius - n * (checkerRadius * 1.1);
+      drawSingleChecker(cx, cy, checkerRadius, p.color, selectedPoint === pointIndex);
+    }
+  }
+  for (let i = 12; i < 24; i++) drawStack(i, true);
+  for (let i = 11; i >= 0; i--) drawStack(i, false);
+  drawBarCheckers(barX, checkerRadius);
+}
+function drawBarCheckers(barX, r) {
+  const cX = barX + barWidth / 2;
+  const spacing = r * 1.1;
+  for (let i = 0; i < bar[1]; i++) drawSingleChecker(cX, offsetY + r + i * spacing, r, 1, selectedPoint === "bar" && currentPlayer === 1);
+  for (let i = 0; i < bar[2]; i++) drawSingleChecker(cX, offsetY + boardHeight - r - i * spacing, r, 2, selectedPoint === "bar" && currentPlayer === 2);
+}
+function drawLegalTargets() {
+  if (!selectedPoint || legalTargets.length === 0) return;
+  const checkerRadius = Math.min(pointWidth, pointHeight / 5) * 0.25;
+  const barX = offsetX + (boardWidth - barWidth) / 2;
+  legalTargets.forEach(m => {
+    const t = m.to;
+    if (t === "off") {
+      let cx, cy; if (currentPlayer === 1) { cx = offsetX - checkerRadius * 2; cy = offsetY + boardHeight - checkerRadius * 2; } else { cx = offsetX + boardWidth + checkerRadius * 2; cy = offsetY + checkerRadius * 2; }
+      ctx.beginPath(); ctx.arc(cx, cy, checkerRadius * 1.3, 0, Math.PI * 2); ctx.strokeStyle = "#00ff88"; ctx.lineWidth = 2; ctx.stroke(); return;
+    }
+    let baseX;
+    if (t >= 12) { const i = t - 12; baseX = (i < 6) ? offsetX + i * pointWidth : barX + barWidth + (i - 6) * pointWidth; }
+    else { const i = 11 - t; baseX = (i < 6) ? offsetX + i * pointWidth : barX + barWidth + (i - 6) * pointWidth; }
+    const isTop = t >= 12; const cx = baseX + pointWidth / 2; const cy = isTop ? offsetY + pointHeight * 0.15 : offsetY + boardHeight - pointHeight * 0.15;
+    ctx.beginPath(); ctx.arc(cx, cy, checkerRadius * 1.3, 0, Math.PI * 2); ctx.strokeStyle = "#00ff88"; ctx.lineWidth = 2; ctx.stroke();
+  });
+}
+function drawCursor() {
+  const checkerRadius = Math.min(pointWidth, pointHeight / 5) * 0.2;
+  const barX = offsetX + (boardWidth - barWidth) / 2;
+  const target = cursorIndex;
+  if (target === "bar") {
+    const cx = barX + barWidth / 2;
+    const cy = (currentPlayer === 1) ? offsetY + checkerRadius * 3 : offsetY + boardHeight - checkerRadius * 3;
+    ctx.beginPath(); ctx.arc(cx, cy, checkerRadius * 1.6, 0, Math.PI * 2); ctx.strokeStyle = "#66b2ff"; ctx.lineWidth = 2; ctx.stroke();
+    return;
+  }
+  let baseX;
+  if (target >= 12) { const i = target - 12; baseX = (i < 6) ? offsetX + i * pointWidth : barX + barWidth + (i - 6) * pointWidth; }
+  else { const i = 11 - target; baseX = (i < 6) ? offsetX + i * pointWidth : barX + barWidth + (i - 6) * pointWidth; }
+  const isTop = target >= 12; const cx = baseX + pointWidth / 2; const cy = isTop ? offsetY + checkerRadius * 3 : offsetY + boardHeight - checkerRadius * 3;
+  ctx.beginPath(); ctx.arc(cx, cy, checkerRadius * 1.6, 0, Math.PI * 2); ctx.strokeStyle = "#66b2ff"; ctx.lineWidth = 2; ctx.stroke();
+}
+function draw() { drawBackground(); drawBoardSurface(); drawPoints(); drawCheckers(); drawLegalTargets(); drawCursor(); }
+
+// ---------- INPUT ----------
+canvas.addEventListener("click", e => {
+  if (aiThinking || !isHumanTurn()) return;
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left; const my = e.clientY - rect.top;
+  const barX = offsetX + (boardWidth - barWidth) / 2;
+  if (bar[currentPlayer] > 0 && mx >= barX && mx <= barX + barWidth) { trySelectOrMove("bar"); return; }
+  const inX = mx >= offsetX && mx <= offsetX + boardWidth; const inY = my >= offsetY && my <= offsetY + boardHeight;
+  if (!inX || !inY) { if (selectedPoint !== null && dice.length > 0 && allInHome(currentPlayer)) tryMoveTo("off"); return; }
+  const isTop = my < offsetY + boardHeight / 2;
+  let localX = mx - offsetX; let col; if (mx >= barX && mx <= barX + barWidth) { return; }
+  else if (mx > barX) { localX = mx - (barX + barWidth); col = 6 + Math.floor(localX / pointWidth); }
+  else { col = Math.floor(localX / pointWidth); }
+  if (col < 0 || col > 11) return;
+  const index = isTop ? 12 + col : 11 - col;
+  cursorIndex = index;
+  if (selectedPoint !== null) tryMoveTo(index); else trySelectOrMove(index);
+});
+
+btnRoll.addEventListener("click", () => { if (!isHumanTurn() || aiThinking) return; rollDice(); });
+btnReset.addEventListener("click", () => { startOverlay.classList.add("show"); });
+btnRules.addEventListener("click", () => rulesOverlay.classList.add("show"));
+closeRules.addEventListener("click", () => rulesOverlay.classList.remove("show"));
+
+startBtn.addEventListener("click", startGame);
+modeLight.addEventListener("click", () => selectMode("light"));
+modeDark.addEventListener("click", () => selectMode("dark"));
+modeTwo .addEventListener("click", () => selectMode("two"));
+diffEasy.addEventListener("click", () => selectDiff("easy"));
+diffMed .addEventListener("click", () => selectDiff("medium"));
+diffHard.addEventListener("click", () => selectDiff("hard"));
+
+function selectMode(mode) { [modeLight, modeDark, modeTwo].forEach(el => el.classList.remove("active")); if (mode === "light") modeLight.classList.add("active"); if (mode === "dark") modeDark.classList.add("active"); if (mode === "two") modeTwo.classList.add("active"); setMode(mode); }
+function selectDiff(level) { [diffEasy, diffMed, diffHard].forEach(el => el.classList.remove("active")); if (level === "easy") diffEasy.classList.add("active"); if (level === "medium") diffMed.classList.add("active"); if (level === "hard") diffHard.classList.add("active"); setDifficulty(level); }
+
+// Keyboard / controller
+window.addEventListener("keydown", e => {
+  if (startOverlay.classList.contains("show")) return;
+  if (rulesOverlay.classList.contains("show")) { if (e.key.toLowerCase() === "h" || e.key === "Escape") rulesOverlay.classList.remove("show"); return; }
+  const key = e.key.toLowerCase();
+  if (key === "r" || key === " ") { if (isHumanTurn() && !aiThinking) rollDice(); }
+  if (key === "n") { startOverlay.classList.add("show"); }
+  if (key === "h") { rulesOverlay.classList.toggle("show"); }
+  if (aiThinking || !isHumanTurn()) return;
+  if (["arrowleft","arrowright","arrowup","arrowdown","a","d","w","s"].includes(key)) { moveCursor(key); draw(); e.preventDefault(); }
+  if (key === "enter" || key === " ") { if (selectedPoint !== null && dice.length > 0) tryMoveTo(cursorIndex === "bar" ? "bar" : cursorIndex); else trySelectOrMove(cursorIndex === "bar" ? "bar" : cursorIndex); }
+  if (key === "escape") { selectedPoint = null; legalTargets = []; draw(); }
+  if (key === "b") { cursorIndex = "bar"; draw(); }
+  if (key === "o") { if (selectedPoint !== null) tryMoveTo("off"); }
+});
+
+function moveCursor(key) {
+  const order = [23,22,21,20,19,18,17,16,15,14,13,12,"bar",11,10,9,8,7,6,5,4,3,2,1,0];
+  let idx = order.indexOf(cursorIndex);
+  const delta = (key === "arrowleft" || key === "a") ? -1 : (key === "arrowright" || key === "d") ? 1 : (key === "arrowup" || key === "w") ? -6 : 6;
+  idx = (idx + delta + order.length) % order.length;
+  cursorIndex = order[idx];
+}
+
+// Simple gamepad polling
+let gpPrev = {};
+const DEADZONE = 0.2;
+const REPEAT_DELAY = 230;
+const REPEAT_RATE = 140;
+const modes = ["light", "dark", "two"];
+const diffs = ["easy", "medium", "hard"];
+let gpDebug = false;
+const gpDebugEl = document.createElement("div");
+gpDebugEl.style.position = "fixed";
+gpDebugEl.style.left = "10px";
+gpDebugEl.style.bottom = "10px";
+gpDebugEl.style.zIndex = "9999";
+gpDebugEl.style.fontSize = "12px";
+gpDebugEl.style.color = "#9cf";
+gpDebugEl.style.fontFamily = "monospace";
+gpDebugEl.style.whiteSpace = "pre";
+gpDebugEl.style.pointerEvents = "none";
+gpDebugEl.style.background = "rgba(0,0,0,0.35)";
+gpDebugEl.style.padding = "4px 6px";
+gpDebugEl.style.borderRadius = "4px";
+gpDebugEl.style.display = "none";
+document.body.appendChild(gpDebugEl);
+
+function decodeHatAxis9(v) {
+  if (v === undefined || v === null) return { x: 0, y: 0 };
+  if (v < -0.9) return { x: 0, y: -1 };
+  if (v < -0.7) return { x: 1, y: -1 };
+  if (v < -0.45) return { x: -1, y: 0 };
+  if (v < -0.2) return { x: -1, y: 1 };
+  if (v < 0.2) return { x: 0, y: 1 };
+  if (v < 0.45) return { x: 1, y: 1 };
+  if (v < 0.7) return { x: 1, y: 0 };
+  if (v < 0.9) return { x: 1, y: -1 };
+  return { x: 0, y: -1 };
+}
+function pollGamepad(now) {
+  const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+  if (!pads) return requestAnimationFrame(pollGamepad);
+  for (const pad of pads) {
+    if (!pad) continue;
+    const buttons = pad.buttons.map(b => b.pressed);
+    const axesRaw = pad.axes || [];
+    const ax0 = axesRaw[0] ?? 0, ax1 = axesRaw[1] ?? 0, ax6 = axesRaw[6] ?? 0, ax7 = axesRaw[7] ?? 0, ax9 = axesRaw[9];
+    const hat9 = decodeHatAxis9(ax9);
+    const axisH = Math.abs(ax0) > DEADZONE ? Math.sign(ax0) : 0;
+    const axisV = Math.abs(ax1) > DEADZONE ? Math.sign(ax1) : 0;
+    const hatH  = Math.abs(ax6) > DEADZONE ? Math.sign(ax6) : 0; // some pads expose D-pad on axes[6]
+    const hatV  = Math.abs(ax7) > DEADZONE ? Math.sign(ax7) : 0; // and axes[7]
+    const btnH = buttons[14] ? -1 : buttons[15] ? 1 : 0; // D-pad left/right buttons
+    const btnV = buttons[12] ? -1 : buttons[13] ? 1 : 0; // D-pad up/down buttons
+    const h = btnH || hatH || hat9.x || axisH;
+    const v = btnV || hatV || hat9.y || axisV;
+    const id = pad.index;
+    const prev = gpPrev[id] || { buttons: [], axes: [0, 0], nextH: 0, nextV: 0 };
+    const justPressed = (n) => buttons[n] && !prev.buttons[n];
+
+    if (gpDebug) {
+      gpDebugEl.textContent = `h:${h} v:${v} ax0:${ax0.toFixed(2)} ax1:${ax1.toFixed(2)} ax6:${ax6.toFixed(2)} ax7:${ax7.toFixed(2)} ax9:${ax9 !== undefined ? ax9.toFixed(2) : "--"} b14:${buttons[14] ? 1 : 0} b15:${buttons[15] ? 1 : 0}`;
+    }
+
+    const overlayUp = startOverlay.classList.contains("show") || rulesOverlay.classList.contains("show");
+
+    // Overlay handling
+    if (startOverlay.classList.contains("show")) {
+      if (justPressed(0) || justPressed(9)) startGame();
+      if (h !== 0 && (!prev.axes || h !== prev.axes[0])) {
+        const idx = modes.indexOf(gameMode);
+        const next = modes[(idx + (h === 1 ? 1 : modes.length - 1)) % modes.length];
+        selectMode(next);
+      }
+      if (v !== 0 && (!prev.axes || v !== prev.axes[1])) {
+        const idx = diffs.indexOf(aiLevel);
+        const next = diffs[(idx + (v === 1 ? 1 : diffs.length - 1)) % diffs.length];
+        selectDiff(next);
+      }
+      gpPrev[id] = { buttons, axes: [h, v], nextH: 0, nextV: 0 };
+      continue;
+    }
+    if (rulesOverlay.classList.contains("show")) {
+      if (justPressed(1) || justPressed(3) || justPressed(9)) rulesOverlay.classList.remove("show");
+      gpPrev[id] = { buttons, axes: [h, v], nextH: 0, nextV: 0 };
+      continue;
+    }
+
+    // Global toggles when overlays not up
+    if (justPressed(9)) startOverlay.classList.add("show"); // Start -> new game overlay
+    if (justPressed(3)) rulesOverlay.classList.toggle("show"); // Y -> rules toggle
+    if (justPressed(8)) { gpDebug = !gpDebug; gpDebugEl.style.display = gpDebug ? "block" : "none"; }
+
+    if (justPressed(2)) { if (isHumanTurn() && !aiThinking) rollDice(); }
+    if (justPressed(0)) {
+      const target = cursorIndex === "bar" ? "bar" : cursorIndex;
+      if (selectedPoint !== null && dice.length > 0) tryMoveTo(target); else trySelectOrMove(target);
+    }
+    if (justPressed(1)) { selectedPoint = null; legalTargets = []; draw(); }
+    if (justPressed(4)) { cursorIndex = "bar"; draw(); } // LB -> jump to bar
+    if (justPressed(5)) { if (selectedPoint !== null) tryMoveTo("off"); } // RB -> bear off attempt
+
+    const moveH = h;
+    const moveV = v;
+    const nowTs = now || performance.now();
+    if (moveH !== 0) {
+      if (moveH !== prev.axes[0] || nowTs >= (prev.nextH || 0)) {
+        moveCursor(moveH === -1 ? "arrowleft" : "arrowright");
+        draw();
+        prev.nextH = nowTs + (moveH !== prev.axes[0] ? REPEAT_DELAY : REPEAT_RATE);
+      }
+    } else prev.nextH = nowTs;
+
+    if (moveV !== 0) {
+      if (moveV !== prev.axes[1] || nowTs >= (prev.nextV || 0)) {
+        moveCursor(moveV === -1 ? "arrowup" : "arrowdown");
+        draw();
+        prev.nextV = nowTs + (moveV !== prev.axes[1] ? REPEAT_DELAY : REPEAT_RATE);
+      }
+    } else prev.nextV = nowTs;
+
+    gpPrev[id] = { buttons, axes: [moveH, moveV], nextH: prev.nextH, nextV: prev.nextV };
+  }
+  requestAnimationFrame(pollGamepad);
+}
+requestAnimationFrame(pollGamepad);
+
+// Keyboard fallback to toggle gamepad debug overlay if button mapping differs
+window.addEventListener("keydown", ev => {
+  if (ev.key.toLowerCase() === "g") { gpDebug = !gpDebug; gpDebugEl.style.display = gpDebug ? "block" : "none"; }
+});
+
+// ---------- UI ----------
+function updateUI() {
+  turnText.textContent = "Turn: " + (currentPlayer === 1 ? "LIGHT" : "DARK");
+  diceText.textContent = originalDice.length === 0 ? "Dice: --" : `Dice: ${originalDice.join(", ")} | Left: ${dice.join(", ")}`;
+  modeText.textContent = "Mode: " + (gameMode === "two" ? "2P" : (gameMode === "light" ? "You as LIGHT" : "You as DARK"));
+  aiText.textContent = humanControl[1] && humanControl[2] ? "AI: --" : `AI: ${aiLevel.toUpperCase()}`;
+  btnRoll.disabled = !isHumanTurn() || aiThinking || gameOver || dice.length > 0;
+}
+
+// ---------- START ----------
+initPoints();
+resize();
+updateUI();
+</script>
+</body>
+</html>
