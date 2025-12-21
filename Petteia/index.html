@@ -40,12 +40,13 @@
 			display: flex;
 			flex-direction: column;
 			margin: 0 auto;
+			padding-top: env(safe-area-inset-top, 0px);
 		}
 		header {
 			position: sticky;
 			top: 0;
 			z-index: 5;
-			padding: 16px 18px 10px;
+			padding: calc(16px + env(safe-area-inset-top, 0px)) 18px 10px;
 			display: flex;
 			align-items: center;
 			justify-content: space-between;
@@ -54,7 +55,7 @@
 			border-bottom: 1px solid rgba(255,255,255,0.06);
 			box-shadow: 0 10px 30px rgba(0,0,0,0.35);
 		}
-		header h1 { margin: 0; font-size: 20px; letter-spacing: 0.4px; color: var(--accent-2); }
+		header h1 { margin: 0; font-size: 20px; letter-spacing: 0.4px; color: var(--accent-2); line-height: 1.2; }
 		header .subtitle { margin: 0; color: var(--muted); font-size: 13px; }
 		.row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 		button {
@@ -128,7 +129,7 @@
 		}
 		@media (max-width: 760px) {
 			#board-wrapper { padding: 10px; min-height: 62vh; }
-			header { flex-direction: column; align-items: flex-start; padding: 14px 14px 10px; }
+			header { flex-direction: column; align-items: flex-start; padding: calc(14px + env(safe-area-inset-top, 0px)) 14px 10px; }
 			header h1 { font-size: 18px; }
 		}
 		.overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(8,10,16,0.82); backdrop-filter: blur(4px); z-index: 20; }
@@ -327,8 +328,8 @@
 			const ctx = c.getContext("2d");
 			ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 		});
-		const size = Math.min(layout.width * 0.94, layout.height * 0.94);
-		layout.cell = size / Math.max(COLS, ROWS);
+		const boardSize = Math.min(layout.width, layout.height) * 0.9;
+		layout.cell = boardSize / Math.max(COLS, ROWS);
 		layout.offsetX = (layout.width - layout.cell * COLS) / 2;
 		layout.offsetY = (layout.height - layout.cell * ROWS) / 2;
 		render();
