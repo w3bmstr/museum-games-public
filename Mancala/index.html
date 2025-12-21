@@ -16,23 +16,21 @@
 			--muted: #9aa7bd;
 		}
 		* { box-sizing: border-box; }
+		html, body { margin: 0; padding: 0; width: 100%; height: 100%; }
 		body {
-			margin: 0;
 			background: radial-gradient(circle at 20% 20%, #121828, #0c0f16 40%);
 			font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
 			color: var(--text);
 			display: flex;
 			align-items: center;
 			justify-content: center;
-			min-height: 100vh;
-			height: 100vh;
-			padding: 0;
+			padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
 			overflow: hidden;
 		}
 		#app {
 			width: 100%;
 			height: 100vh;
-			max-width: 1400px;
+			max-width: 1500px;
 			background: var(--panel);
 			border: 1px solid rgba(255,255,255,0.06);
 			border-radius: 16px;
@@ -40,17 +38,22 @@
 			box-shadow: 0 20px 60px rgba(0,0,0,0.35);
 			display: flex;
 			flex-direction: column;
+			margin: 0 auto;
 		}
 		header {
-			padding: 18px 22px 12px;
+			position: sticky;
+			top: 0;
+			z-index: 5;
+			padding: calc(16px + env(safe-area-inset-top, 0px)) 22px 12px;
 			display: flex;
 			align-items: center;
 			justify-content: space-between;
 			gap: 12px;
 			background: linear-gradient(90deg, rgba(196,160,74,0.15), transparent);
 			border-bottom: 1px solid rgba(255,255,255,0.06);
+			box-shadow: 0 10px 30px rgba(0,0,0,0.35);
 		}
-		header h1 { margin: 0; font-size: 20px; letter-spacing: 0.4px; }
+		header h1 { margin: 0; font-size: 20px; letter-spacing: 0.4px; line-height: 1.2; }
 		header .subtitle { margin: 0; color: var(--muted); font-size: 13px; }
 		main {
 			display: grid;
@@ -61,6 +64,7 @@
 			overflow: hidden;
 		}
 		#board-wrapper {
+			position: relative;
 			padding: 18px;
 			background: #0d121d;
 			height: 100%;
@@ -78,8 +82,9 @@
 			box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06), 0 14px 30px rgba(0,0,0,0.35);
 			width: 100%;
 			height: auto;
+			max-width: 1100px;
 			max-height: 100%;
-			max-width: 100%;
+			aspect-ratio: 11 / 4.1;
 		}
 		#ui-panel {
 			padding: 18px 18px 24px;
@@ -108,8 +113,16 @@
 		.option-active { outline: 2px solid var(--accent-2); outline-offset: 1px; }
 		select { width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.14); background: rgba(255,255,255,0.06); color: var(--text); }
 		label { font-size: 13px; color: var(--muted); display: block; margin-top: 6px; }
-		@media (max-width: 980px) { main { grid-template-columns: 1fr; } #ui-panel { border-left: none; border-top: 1px solid rgba(255,255,255,0.06); } }
-		@media (max-width: 640px) { #board-wrapper { padding: 10px; } header { flex-direction: column; align-items: flex-start; } body { padding: 0; } }
+		@media (max-width: 1040px) {
+			main { display: flex; flex-direction: column; }
+			#board-wrapper { flex: 1 1 auto; min-height: 60vh; }
+			#ui-panel { border-left: none; border-top: 1px solid rgba(255,255,255,0.06); height: auto; max-height: 38vh; }
+		}
+		@media (max-width: 760px) {
+			#board-wrapper { padding: 12px; min-height: 62vh; }
+			header { flex-direction: column; align-items: flex-start; padding: calc(14px + env(safe-area-inset-top, 0px)) 18px 10px; }
+			header h1 { font-size: 18px; }
+		}
 	</style>
 </head>
 <body>
@@ -619,10 +632,12 @@
 
 		function changeSize() {
 			const rect = document.getElementById('board-wrapper').getBoundingClientRect();
-			canvas.width = Math.min(1100, rect.width * devicePixelRatio);
-			canvas.height = Math.min(400, rect.height * devicePixelRatio);
-			canvas.style.width = rect.width + 'px';
-			canvas.style.height = Math.min(400, rect.height) + 'px';
+			const targetWidth = Math.min(1100, rect.width * 0.96);
+			const targetHeight = Math.min(420, rect.height * 0.9);
+			canvas.width = targetWidth * devicePixelRatio;
+			canvas.height = targetHeight * devicePixelRatio;
+			canvas.style.width = `${targetWidth}px`;
+			canvas.style.height = `${targetHeight}px`;
 			ctx.setTransform(1,0,0,1,0,0);
 			ctx.scale(devicePixelRatio, devicePixelRatio);
 			draw();
