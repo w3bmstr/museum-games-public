@@ -354,8 +354,10 @@
       const ctx = canvas.getContext("2d");
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     });
-    const maxBoardSize = Math.min(layout.width, layout.height) * 0.94;
-    layout.boardSize = Math.max(360, maxBoardSize);
+    const maxBoardSize = Math.min(layout.width, layout.height) * 0.9;
+    const widthCap = layout.width - 12;
+    const heightCap = layout.height - 12;
+    layout.boardSize = Math.max(320, Math.min(maxBoardSize, widthCap, heightCap));
     layout.cellSize = layout.boardSize / (SIZE - 1);
     layout.offsetX = (layout.width - layout.boardSize) / 2;
     layout.offsetY = (layout.height - layout.boardSize) / 2;
