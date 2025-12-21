@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pmega Chess</title>
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background: #0c0d11;
+            color: #e8e8ec;
+            font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+            overflow: hidden;
+        }
+        #game-container { position: relative; width: 100vw; height: 100vh; overflow: hidden; background: radial-gradient(circle at 20% 20%, rgba(80,120,255,0.08), transparent 45%), radial-gradient(circle at 80% 70%, rgba(255,170,70,0.08), transparent 45%), #0c0d11; }
+        canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+        .layer-board { z-index: 0; pointer-events: none; }
+        .layer-pieces { z-index: 1; pointer-events: none; }
+        .layer-ui { z-index: 2; }
+        #hud {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 5;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .panel {
+            background: rgba(0,0,0,0.55);
+            border: 1px solid #1f2430;
+            border-radius: 10px;
+            padding: 10px 12px;
+            min-width: 240px;
+            box-shadow: 0 10px 28px rgba(0,0,0,0.35);
+        }
+        .panel h4 { margin: 0 0 6px 0; font-size: 13px; letter-spacing: 0.5px; color: #ffc857; }
+        .panel p { margin: 4px 0; font-size: 13px; }
+        #controls { display: flex; gap: 8px; flex-wrap: wrap; }
+        #controls button { padding: 8px 10px; border: none; border-radius: 8px; background: #252a38; color: #e8e8ec; cursor: pointer; font-size: 13px; }
+        #controls button.primary { background: linear-gradient(135deg, #58c6ff, #2f81ff); color: #fff; }
+        #controls button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .history-panel { position: relative; max-height: 260px; overflow-y: auto; font-family: monospace; font-size: 12px; }
+        .history-panel .move-line { margin: 2px 0; }
+        .history-close { position: absolute; top: 6px; right: 6px; padding: 4px 8px; border: none; border-radius: 6px; background: #252a38; color: #e8e8ec; cursor: pointer; font-size: 11px; }
+        #btn-history { display: none; }
+        @media (max-width: 720px) {
+            #hud { position: fixed; top: auto; bottom: 0; left: 0; right: 0; flex-direction: row; gap: 6px; padding: 6px; background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.45) 40%); backdrop-filter: blur(8px); }
+            #hud .panel { min-width: 0; flex: 1; }
+            #history { display: none; position: fixed; right: 8px; bottom: 78px; width: 82vw; max-width: 380px; max-height: 55vh; z-index: 12; background: rgba(0,0,0,0.85); border-radius: 10px; }
+            #history.show { display: block; }
+            #btn-history { display: inline-block; }
+        }
+        #start-overlay {
+            position: absolute; inset: 0;
+            display: flex; align-items: center; justify-content: center;
+            background: rgba(0,0,0,0.72); z-index: 10;
+        }
+        #start-card {
+            background: #161820;
+            border: 1px solid #262c3a;
+            border-radius: 12px;
+            padding: 18px 22px;
+            color: #f5f5f5;
+            min-width: 280px;
+            box-shadow: 0 12px 30px rgba(0,0,0,0.35);
+        }
+        #start-card h2 { margin: 0 0 10px 0; font-size: 20px; }
+        #start-card p { margin: 0 0 12px 0; font-size: 14px; color: #cfd3dd; }
+        #start-card .btn-row { display: flex; gap: 10px; margin-top: 10px; }
+        #start-card button { flex: 1; padding: 10px 12px; border: none; border-radius: 8px; background: linear-gradient(135deg, #58c6ff, #2f81ff); color: #fff; font-weight: 700; cursor: pointer; }
+        #start-card button.secondary { background: #3a3f4f; }
+        #start-card button.active { outline: 2px solid #fff; }
+        #rules-overlay { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.7); z-index: 11; }
+        #rules-overlay.show { display: flex; }
+        #rules-card { background: #161820; border: 1px solid #262c3a; border-radius: 12px; padding: 18px 22px; color: #f5f5f5; max-width: 720px; width: 90%; box-shadow: 0 12px 30px rgba(0,0,0,0.35); line-height: 1.45; }
+        #rules-card h3 { margin: 0 0 8px 0; font-size: 18px; }
+        #rules-card ul { margin: 8px 0 0 18px; padding: 0; }
+        #rules-card li { margin: 4px 0; }
+        #close-rules { margin-top: 12px; padding: 8px 12px; border: none; border-radius: 8px; background: #3a3f4f; color: #fff; cursor: pointer; }
+    </style>
+</head>
+<body>
+<div id="game-container">
+    <div id="hud">
+        <div class="panel">
+            <h4>Status</h4>
+            <p id="turn-text">Turn: --</p>
+            <p id="ai-text">AI: --</p>
+            <p id="msg-text">Ready</p>
+            <p id="cap-text">Captures W:0 B:0</p>
+            <p id="lastmove-text">Last: --</p>
+        </div>
+        <div id="controls" class="panel">
+            <button id="btn-start" class="primary">New Game</button>
+            <button id="btn-reset">Reset</button>
+            <button id="btn-undo">Undo</button>
+            <button id="btn-history">History</button>
+            <button id="btn-rules">Rules</button>
+        </div>
+        <div id="history" class="panel history-panel">
+            <h4>Moves</h4>
+            <button id="btn-history-close" class="history-close">Close</button>
+            <div id="move-list"></div>
+        </div>
+    </div>
+
+    <div id="start-overlay">
+        <div id="start-card">
+            <h2>Pmega Chess</h2>
+            <p>Omega-style chess: 10x10 board plus four wizard squares. Champions on corners, wizards on off-corners.</p>
+            <div class="btn-row">
+                <button id="btn-1p">1 Player (vs AI)</button>
+                <button id="btn-2p" class="secondary">2 Players</button>
+            </div>
+            <p style="margin-top:12px; margin-bottom:6px;">AI Difficulty</p>
+            <div class="btn-row">
+                <button id="btn-easy" class="secondary">Easy</button>
+                <button id="btn-med" class="active">Medium</button>
+                <button id="btn-hard" class="secondary">Hard</button>
+            </div>
+            <p style="margin-top:12px; margin-bottom:6px;">Start</p>
+            <div class="btn-row" style="margin-top:8px;">
+                <button id="btn-start-overlay" class="primary">Start Game</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="rules-overlay">
+        <div id="rules-card">
+            <h3>Rules</h3>
+            <ul>
+                <li>Board: 10x10 plus four extra diagonal corner squares. White at bottom, black at top.</li>
+                <li>Setup: back rank (a-j) = C R N B Q K B N R C. Pawns on the next rank. Wizards sit on the four off-board corner squares.</li>
+                <li>Champion (C): leaper to knight squares, two-step orthogonal, or two-step diagonal (all jump).</li>
+                <li>Wizard (W): leaper one step diagonal or camel jump (3,1). Color-bound.</li>
+                <li>Pawns move 1 forward (optionally 2 from start on the main 10 files), capture diagonally forward. Promote to queen on far rank. No en passant or castling.</li>
+                <li>Win by capturing the king. Controls: click squares, arrows + Enter/Space, U undo, R reset, H rules.</li>
+            </ul>
+            <button id="close-rules">Close</button>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    const LIGHT = 1;
+    const DARK = 2;
+    const dpr = window.devicePixelRatio || 1;
+
+    const COLS = 10;
+    const ROWS = 10;
+
+    const EXTRA = [
+        { x: -1, y: -1 },
+        { x: 10, y: -1 },
+        { x: 10, y: 10 },
+        { x: -1, y: 10 }
+    ];
+
+    const BASE_CELLS = [];
+    for (let y = 0; y < ROWS; y++) {
+        for (let x = 0; x < COLS; x++) BASE_CELLS.push({ x, y });
+    }
+    const CELLS = [...BASE_CELLS, ...EXTRA];
+    const CELL_KEYS = new Set(CELLS.map(c => key(c.x, c.y)));
+
+    const PIECE_VALUES = { K: 1000, Q: 9, R: 5, B: 3, N: 3, P: 1, C: 5, W: 3 };
+
+    const container = document.getElementById("game-container");
+    const startOverlay = document.getElementById("start-overlay");
+    const btn1p = document.getElementById("btn-1p");
+    const btn2p = document.getElementById("btn-2p");
+    const btnEasy = document.getElementById("btn-easy");
+    const btnMed = document.getElementById("btn-med");
+    const btnHard = document.getElementById("btn-hard");
+    const btnStartOverlay = document.getElementById("btn-start-overlay");
+    const btnRules = document.getElementById("btn-rules");
+    const rulesOverlay = document.getElementById("rules-overlay");
+    const closeRules = document.getElementById("close-rules");
+    const hudBtnStart = document.getElementById("btn-start");
+    const hudBtnReset = document.getElementById("btn-reset");
+    const hudBtnUndo = document.getElementById("btn-undo");
+    const hudBtnHistory = document.getElementById("btn-history");
+    const btnHistoryClose = document.getElementById("btn-history-close");
+    const historyPanel = document.getElementById("history");
+    const turnText = document.getElementById("turn-text");
+    const aiText = document.getElementById("ai-text");
+    const msgText = document.getElementById("msg-text");
+    const capText = document.getElementById("cap-text");
+    const lastMoveText = document.getElementById("lastmove-text");
+    const moveList = document.getElementById("move-list");
+
+    const boardLayer = document.createElement("canvas");
+    const piecesLayer = document.createElement("canvas");
+    const uiLayer = document.createElement("canvas");
+    boardLayer.className = "layer-board";
+    piecesLayer.className = "layer-pieces";
+    uiLayer.className = "layer-ui";
+    container.appendChild(boardLayer);
+    container.appendChild(piecesLayer);
+    container.appendChild(uiLayer);
+
+    const layout = { width: 0, height: 0, cell: 0, offsetX: 0, offsetY: 0, span: 0 };
+
+    const state = {
+        board: new Map(),
+        turn: LIGHT,
+        moveHistory: [],
+        lastMove: null,
+        captures: { [LIGHT]: 0, [DARK]: 0 },
+        gameOver: false,
+        winner: null,
+        message: "",
+        cursor: { x: 4, y: 9 },
+        selected: null,
+        legal: [],
+        aiEnabled: true,
+        aiColor: DARK,
+        aiLevel: "medium",
+        thinking: false,
+        menuActive: true
+    };
+
+    let selectedMode = "1p";
+    let selectedDiff = "medium";
+
+    function key(x, y) { return `${x},${y}`; }
+    function isValid(x, y) { return CELL_KEYS.has(key(x, y)); }
+
+    function setPiece(x, y, piece) {
+        if (!isValid(x, y)) return;
+        if (piece) state.board.set(key(x, y), piece); else state.board.delete(key(x, y));
+    }
+    function getPiece(x, y) { return state.board.get(key(x, y)) || null; }
+
+    function resetBoard() {
+        state.board.clear();
+        // Black setup (top)
+        const back = ["C","R","N","B","Q","K","B","N","R","C"];
+        for (let x = 0; x < COLS; x++) setPiece(x, 0, p(back[x], DARK));
+        for (let x = 0; x < COLS; x++) setPiece(x, 1, p("P", DARK));
+        setPiece(-1, -1, p("W", DARK));
+        setPiece(10, -1, p("W", DARK));
+        // White setup (bottom)
+        for (let x = 0; x < COLS; x++) setPiece(x, 8, p("P", LIGHT));
+        for (let x = 0; x < COLS; x++) setPiece(x, 9, p(back[x], LIGHT));
+        setPiece(-1, 10, p("W", LIGHT));
+        setPiece(10, 10, p("W", LIGHT));
+
+        state.turn = LIGHT;
+        state.moveHistory = [];
+        state.lastMove = null;
+        state.captures = { [LIGHT]: 0, [DARK]: 0 };
+        state.gameOver = false;
+        state.winner = null;
+        state.message = "";
+        state.selected = null;
+        state.legal = [];
+        state.cursor = { x: 4, y: 9 };
+        updateHud();
+    }
+
+    function p(type, color) { return { type, color }; }
+
+    function resize() {
+        layout.width = window.innerWidth;
+        layout.height = window.innerHeight;
+        [boardLayer, piecesLayer, uiLayer].forEach(c => {
+            c.width = layout.width * dpr;
+            c.height = layout.height * dpr;
+            c.style.width = `${layout.width}px`;
+            c.style.height = `${layout.height}px`;
+            const ctx = c.getContext("2d");
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        });
+        layout.span = 12; // from -1..10
+        const size = Math.min(layout.width, layout.height) * 0.92;
+        layout.cell = size / layout.span;
+        layout.offsetX = (layout.width - layout.cell * layout.span) / 2;
+        layout.offsetY = (layout.height - layout.cell * layout.span) / 2;
+        render();
+    }
+
+    function toScreen(x, y) {
+        return {
+            x: layout.offsetX + (x + 1) * layout.cell,
+            y: layout.offsetY + (y + 1) * layout.cell
+        };
+    }
+
+    function drawBoard(ctx) {
+        ctx.clearRect(0, 0, layout.width, layout.height);
+        ctx.fillStyle = "#0c0d11";
+        ctx.fillRect(0, 0, layout.width, layout.height);
+
+        for (const cell of CELLS) {
+            const { x, y } = cell;
+            const scr = toScreen(x, y);
+            const even = (x + y) % 2 === 0;
+            ctx.fillStyle = even ? "#2d3040" : "#3d4154";
+            ctx.fillRect(scr.x, scr.y, layout.cell, layout.cell);
+        }
+    }
+
+    function drawPieces(ctx) {
+        ctx.clearRect(0, 0, layout.width, layout.height);
+        ctx.font = `${layout.cell * 0.5}px sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        for (const cell of CELLS) {
+            const piece = getPiece(cell.x, cell.y);
+            if (!piece) continue;
+            const scr = toScreen(cell.x, cell.y);
+            const cx = scr.x + layout.cell / 2;
+            const cy = scr.y + layout.cell / 2;
+            ctx.fillStyle = piece.color === LIGHT ? "#f5f5f7" : "#0f121b";
+            ctx.strokeStyle = piece.color === LIGHT ? "#1d1f2a" : "#6ab0ff";
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            ctx.arc(cx, cy, layout.cell * 0.36, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+            ctx.fillStyle = piece.color === LIGHT ? "#111" : "#f5f5f7";
+            ctx.fillText(piece.type, cx, cy + layout.cell * 0.02);
+        }
+
+        const ui = uiLayer.getContext("2d");
+        ui.clearRect(0, 0, layout.width, layout.height);
+        if (state.selected) {
+            drawCellOutline(ui, state.selected.x, state.selected.y, "#58c6ff", 3);
+            state.legal.forEach(m => drawCellOutline(ui, m.x, m.y, "#ffd166", 2));
+        }
+        if (state.lastMove) {
+            drawCellOutline(ui, state.lastMove.from.x, state.lastMove.from.y, "#7ed0ff", 2);
+            drawCellOutline(ui, state.lastMove.to.x, state.lastMove.to.y, "#7ed0ff", 2);
+        }
+        drawCellOutline(ui, state.cursor.x, state.cursor.y, "#58c6ff", 1.5, true);
+    }
+
+    function drawCellOutline(ctx, x, y, color, w, dashed=false) {
+        if (!isValid(x, y)) return;
+        const scr = toScreen(x, y);
+        ctx.save();
+        if (dashed) ctx.setLineDash([6,4]);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = w;
+        ctx.strokeRect(scr.x + 2, scr.y + 2, layout.cell - 4, layout.cell - 4);
+        ctx.restore();
+    }
+
+    function onBoard(x, y) { return isValid(x, y); }
+
+    function genMovesFor(x, y, boardMap) {
+        const piece = boardMap.get(key(x, y));
+        if (!piece) return [];
+        const color = piece.color;
+        const moves = [];
+        const push = (nx, ny) => {
+            if (!onBoard(nx, ny)) return;
+            const t = boardMap.get(key(nx, ny));
+            if (!t || t.color !== color) moves.push({ x: nx, y: ny });
+        };
+
+        const slide = dirs => {
+            for (const [dx, dy] of dirs) {
+                let nx = x + dx, ny = y + dy;
+                while (onBoard(nx, ny)) {
+                    const t = boardMap.get(key(nx, ny));
+                    push(nx, ny);
+                    if (t) break;
+                    nx += dx; ny += dy;
+                }
+            }
+        };
+
+        switch (piece.type) {
+            case "P": {
+                const dir = color === LIGHT ? -1 : 1;
+                const ny1 = y + dir;
+                if (onBoard(x, ny1) && !boardMap.get(key(x, ny1))) push(x, ny1);
+                const startRank = color === LIGHT ? 8 : 1;
+                const ny2 = y + dir * 2;
+                if (y === startRank && onBoard(x, ny2) && !boardMap.get(key(x, ny2)) && !boardMap.get(key(x, ny1))) push(x, ny2);
+                for (const dx of [-1, 1]) {
+                    const nx = x + dx;
+                    if (!onBoard(nx, ny1)) continue;
+                    const t = boardMap.get(key(nx, ny1));
+                    if (t && t.color !== color) push(nx, ny1);
+                }
+                break;
+            }
+            case "N": knightLike([[1,2],[2,1],[-1,2],[-2,1],[1,-2],[2,-1],[-1,-2],[-2,-1]], push); break;
+            case "B": slide([[1,1],[1,-1],[-1,1],[-1,-1]]); break;
+            case "R": slide([[1,0],[-1,0],[0,1],[0,-1]]); break;
+            case "Q": slide([[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]]); break;
+            case "K": knightLike([[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]], push); break;
+            case "C": {
+                knightLike([[1,2],[2,1],[-1,2],[-2,1],[1,-2],[2,-1],[-1,-2],[-2,-1],[2,0],[-2,0],[0,2],[0,-2],[2,2],[2,-2],[-2,2],[-2,-2]], push);
+                break;
+            }
+            case "W": {
+                knightLike([[1,1],[-1,1],[1,-1],[-1,-1],[3,1],[3,-1],[-3,1],[-3,-1],[1,3],[-1,3],[1,-3],[-1,-3]], push);
+                break;
+            }
+        }
+        return moves;
+
+        function knightLike(steps, fn) {
+            for (const [dx, dy] of steps) fn(x + dx, y + dy);
+        }
+    }
+
+    function clickCell(x, y) {
+        if (state.menuActive || state.gameOver) return;
+        const piece = getPiece(x, y);
+        if (state.selected) {
+            const isLegal = state.legal.some(m => m.x === x && m.y === y);
+            if (isLegal) {
+                makeMove(state.selected.x, state.selected.y, x, y);
+                state.selected = null;
+                state.legal = [];
+                return;
+            }
+        }
+        if (piece && piece.color === state.turn) {
+            state.selected = { x, y };
+            state.legal = genMovesFor(x, y, state.board);
+            state.cursor = { x, y };
+            state.message = "";
+        } else {
+            state.selected = null;
+            state.legal = [];
+        }
+        updateHud();
+        render();
+    }
+
+    function makeMove(fx, fy, tx, ty) {
+        if (state.gameOver) return;
+        const piece = getPiece(fx, fy);
+        if (!piece) return;
+        const target = getPiece(tx, ty);
+        const move = { from: { x: fx, y: fy }, to: { x: tx, y: ty }, piece: { ...piece }, captured: target ? { ...target } : null };
+        setPiece(fx, fy, null);
+        setPiece(tx, ty, piece);
+        if (piece.type === "P" && ((piece.color === LIGHT && ty <= 0) || (piece.color === DARK && ty >= 9))) {
+            piece.type = "Q";
+            move.promoted = true;
+        }
+        if (target) state.captures[piece.color] += PIECE_VALUES[target.type] || 1;
+        state.moveHistory.push(move);
+        state.lastMove = move;
+        if (target && target.type === "K") {
+            state.gameOver = true;
+            state.winner = piece.color === LIGHT ? "White" : "Black";
+            state.message = "King captured";
+            updateHud();
+            render();
+            return;
+        }
+        state.turn = state.turn === LIGHT ? DARK : LIGHT;
+        state.message = "";
+        updateHud();
+        render();
+        maybeRunAI();
+    }
+
+    function undo() {
+        const mv = state.moveHistory.pop();
+        if (!mv) return;
+        setPiece(mv.from.x, mv.from.y, { ...mv.piece });
+        setPiece(mv.to.x, mv.to.y, mv.captured ? { ...mv.captured } : null);
+        if (mv.promoted) {
+            const back = getPiece(mv.from.x, mv.from.y);
+            if (back) back.type = "P";
+        }
+        if (mv.captured) state.captures[mv.piece.color] -= PIECE_VALUES[mv.captured.type] || 1;
+        state.turn = mv.piece.color;
+        state.lastMove = state.moveHistory[state.moveHistory.length - 1] || null;
+        state.gameOver = false;
+        state.winner = null;
+        updateHud();
+        render();
+    }
+
+    function moveCursor(dx, dy) {
+        const all = CELLS;
+        let idx = all.findIndex(c => c.x === state.cursor.x && c.y === state.cursor.y);
+        idx = (idx + all.length) % all.length;
+        idx = (idx + (dy * COLS + dx)) % all.length;
+        const next = all[(idx + all.length) % all.length];
+        state.cursor = { x: next.x, y: next.y };
+    }
+
+    function listMovesForColor(color) {
+        const moves = [];
+        for (const cell of CELLS) {
+            const pc = getPiece(cell.x, cell.y);
+            if (!pc || pc.color !== color) continue;
+            const legal = genMovesFor(cell.x, cell.y, state.board);
+            for (const m of legal) moves.push({ from: { x: cell.x, y: cell.y }, to: m, piece: pc });
+        }
+        return moves;
+    }
+
+    function aiChooseMove() {
+        const moves = listMovesForColor(state.aiColor);
+        if (!moves.length) return null;
+        if (state.aiLevel === "easy") return moves[Math.floor(Math.random() * moves.length)];
+        let best = -Infinity;
+        const scored = [];
+        for (const mv of moves) {
+            const target = getPiece(mv.to.x, mv.to.y);
+            const cap = target ? (PIECE_VALUES[target.type] || 1) : 0;
+            let score = cap + Math.random() * 0.05;
+            if (state.aiLevel === "hard") score += cap * 1.5 - (PIECE_VALUES[mv.piece.type] || 1) * 0.2;
+            best = Math.max(best, score);
+            scored.push({ mv, score });
+        }
+        const bestMoves = scored.filter(s => s.score >= best - 0.001).map(s => s.mv);
+        return bestMoves[Math.floor(Math.random() * bestMoves.length)];
+    }
+
+    function maybeRunAI() {
+        if (!state.aiEnabled) return;
+        if (state.menuActive) return;
+        if (state.gameOver) return;
+        if (state.turn !== state.aiColor) return;
+        if (state.thinking) return;
+        state.thinking = true;
+        setTimeout(() => {
+            const mv = aiChooseMove();
+            if (mv) makeMove(mv.from.x, mv.from.y, mv.to.x, mv.to.y);
+            state.thinking = false;
+            updateHud();
+        }, state.aiLevel === "hard" ? 140 : state.aiLevel === "medium" ? 200 : 260);
+    }
+
+    function renderHistory() {
+        const sq = (x, y) => `${fileLabel(x)}${rankLabel(y)}`;
+        moveList.innerHTML = state.moveHistory.map((mv, i) => {
+            const capMark = mv.captured ? "x" : "-";
+            const promo = mv.promoted ? "=Q" : "";
+            return `<div class="move-line">${i + 1}. ${mv.piece.type}${sq(mv.from.x, mv.from.y)}${capMark}${sq(mv.to.x, mv.to.y)}${promo}</div>`;
+        }).join("");
+    }
+
+    function fileLabel(x) {
+        // extras get X labels
+        if (x < 0) return "xa"; if (x >= COLS) return "xj";
+        return String.fromCharCode(97 + x);
+    }
+    function rankLabel(y) {
+        if (y < 0) return "0";
+        if (y >= ROWS) return "11";
+        return ROWS - y;
+    }
+
+    function toggleHistory(force) {
+        const show = force !== undefined ? force : !historyPanel.classList.contains("show");
+        historyPanel.classList.toggle("show", show);
+    }
+
+    function toggleRules(force) {
+        const show = force !== undefined ? force : !rulesOverlay.classList.contains("show");
+        rulesOverlay.classList.toggle("show", show);
+    }
+
+    function showStartOverlay() {
+        startOverlay.style.display = "flex";
+        state.menuActive = true;
+        setBoardInput(false);
+    }
+
+    function setBoardInput(enabled) {
+        uiLayer.style.pointerEvents = enabled ? "auto" : "none";
+    }
+
+    function handlePointer(e) {
+        if (state.menuActive) return;
+        const rect = uiLayer.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+        const { x, y } = pickCell(mx, my) || {};
+        if (x === undefined) return;
+        state.cursor = { x, y };
+        clickCell(x, y);
+    }
+
+    function pickCell(px, py) {
+        let best = null;
+        let bestDist = layout.cell * 0.6;
+        for (const c of CELLS) {
+            const scr = toScreen(c.x, c.y);
+            const cx = scr.x + layout.cell / 2;
+            const cy = scr.y + layout.cell / 2;
+            const dx = px - cx;
+            const dy = py - cy;
+            const d = Math.sqrt(dx*dx + dy*dy);
+            if (d < bestDist) { bestDist = d; best = { x: c.x, y: c.y }; }
+        }
+        return best;
+    }
+
+    function handleKey(e) {
+        const key = e.key.toLowerCase();
+        if (rulesOverlay.classList.contains("show")) {
+            if (["h","escape","enter"," "].includes(key)) toggleRules(false);
+            return;
+        }
+        if (state.menuActive) {
+            if (key === "1") { selectedMode = "1p"; applyModeUI(); }
+            else if (key === "2") { selectedMode = "2p"; applyModeUI(); }
+            else if (key === "arrowup" || key === "w") { cycleDiff(-1); }
+            else if (key === "arrowdown" || key === "s") { cycleDiff(1); }
+            else if (key === "enter" || key === " ") { startSelected(); }
+            return;
+        }
+        if (key === "arrowup") moveCursor(0, -1);
+        else if (key === "arrowdown") moveCursor(0, 1);
+        else if (key === "arrowleft") moveCursor(-1, 0);
+        else if (key === "arrowright") moveCursor(1, 0);
+        else if (key === "enter" || key === " ") { clickCell(state.cursor.x, state.cursor.y); }
+        else if (key === "escape") { state.selected = null; state.legal = []; state.message = ""; }
+        else if (key === "u") { undo(); }
+        else if (key === "r") { resetBoard(); render(); updateHud(); }
+        else if (key === "h") { toggleRules(); }
+        updateHud();
+        render();
+        maybeRunAI();
+    }
+
+    function updateHud() {
+        turnText.textContent = `Turn: ${state.turn === LIGHT ? "WHITE" : "BLACK"}`;
+        aiText.textContent = state.aiEnabled ? `AI: ${state.aiLevel.toUpperCase()} (${state.aiColor === LIGHT ? "WHITE" : "BLACK"})` : "AI: OFF";
+        msgText.textContent = state.gameOver ? `${state.winner || ""}` : (state.message || "Ready");
+        capText.textContent = `Captures W:${state.captures[LIGHT]} B:${state.captures[DARK]}`;
+        if (state.lastMove) {
+            const { from, to } = state.lastMove;
+            lastMoveText.textContent = `Last: ${fileLabel(from.x)}${rankLabel(from.y)}${fileLabel(to.x)}${rankLabel(to.y)}`;
+        } else lastMoveText.textContent = "Last: --";
+        renderHistory();
+        if (!state.menuActive && state.aiEnabled && !state.gameOver && state.turn === state.aiColor && !state.thinking) maybeRunAI();
+    }
+
+    function applyModeUI() {
+        [btn1p, btn2p].forEach(b => b.classList.remove("active"));
+        if (selectedMode === "1p") btn1p.classList.add("active"); else btn2p.classList.add("active");
+    }
+
+    function setDifficulty(level) {
+        state.aiLevel = level;
+        selectedDiff = level;
+        applyDifficultyUI();
+        updateHud();
+    }
+
+    function applyDifficultyUI() {
+        [btnEasy, btnMed, btnHard].forEach(b => b.classList.remove("active"));
+        if (state.aiLevel === "easy") btnEasy.classList.add("active");
+        else if (state.aiLevel === "hard") btnHard.classList.add("active");
+        else btnMed.classList.add("active");
+        selectedDiff = state.aiLevel;
+    }
+
+    function cycleDiff(delta) {
+        const diffs = ["easy", "medium", "hard"];
+        const idx = diffs.indexOf(selectedDiff);
+        selectedDiff = diffs[(idx + delta + diffs.length) % diffs.length];
+        state.aiLevel = selectedDiff;
+        applyDifficultyUI();
+    }
+
+    function start1P() {
+        state.aiEnabled = true;
+        state.aiColor = DARK;
+        state.menuActive = false;
+        startOverlay.style.display = "none";
+        setBoardInput(true);
+        resetBoard();
+        applyDifficultyUI();
+        render();
+        updateHud();
+        maybeRunAI();
+    }
+
+    function start2P() {
+        state.aiEnabled = false;
+        state.menuActive = false;
+        startOverlay.style.display = "none";
+        setBoardInput(true);
+        resetBoard();
+        applyDifficultyUI();
+        render();
+        updateHud();
+    }
+
+    function startSelected() {
+        state.aiLevel = selectedDiff;
+        if (selectedMode === "1p") start1P(); else start2P();
+    }
+
+    function render() {
+        drawBoard(boardLayer.getContext("2d"));
+        drawPieces(piecesLayer.getContext("2d"));
+    }
+
+    // Init
+    resetBoard();
+    resize();
+    applyDifficultyUI();
+    applyModeUI();
+    setBoardInput(false);
+    render();
+    updateHud();
+
+    // Events
+    uiLayer.addEventListener("mousedown", handlePointer);
+    window.addEventListener("resize", () => { resize(); render(); });
+    window.addEventListener("keydown", handleKey);
+    btn1p.addEventListener("click", () => { selectedMode = "1p"; applyModeUI(); });
+    btn2p.addEventListener("click", () => { selectedMode = "2p"; applyModeUI(); });
+    btnEasy.addEventListener("click", () => setDifficulty("easy"));
+    btnMed.addEventListener("click", () => setDifficulty("medium"));
+    btnHard.addEventListener("click", () => setDifficulty("hard"));
+    btnStartOverlay.addEventListener("click", startSelected);
+    btnRules.addEventListener("click", () => toggleRules(true));
+    closeRules.addEventListener("click", () => toggleRules(false));
+    hudBtnStart.addEventListener("click", showStartOverlay);
+    hudBtnReset.addEventListener("click", () => { resetBoard(); render(); updateHud(); });
+    hudBtnUndo.addEventListener("click", () => { undo(); render(); updateHud(); });
+    hudBtnHistory.addEventListener("click", () => toggleHistory());
+    btnHistoryClose.addEventListener("click", () => toggleHistory(false));
+
+})();
+</script>
+</body>
+</html>

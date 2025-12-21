@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Medieval European Chess</title>
+  <style>
+    :root {
+      --bg: #0c0f16;
+      --panel: #141a26;
+      --accent: #c4a04a;
+      --accent-2: #5aa9e6;
+      --grid-light: #e6e2d3;
+      --grid-dark: #b7ad99;
+      --text: #f5f7fb;
+      --muted: #9aa7bd;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: radial-gradient(circle at 20% 20%, #121828, #0c0f16 40%);
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      height: 100vh;
+      padding: 0;
+      overflow: hidden;
+    }
+    #app {
+      width: 100%;
+      height: 100vh;
+      max-width: 1400px;
+      background: var(--panel);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      z-index: 1;
+    }
+    header {
+      padding: 18px 22px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      background: linear-gradient(90deg, rgba(196,160,74,0.15), transparent);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      z-index: 2;
+    }
+    header h1 { margin: 0; font-size: 20px; letter-spacing: 0.4px; }
+    header .subtitle { margin: 0; color: var(--muted); font-size: 13px; }
+    main {
+      display: grid;
+      grid-template-columns: minmax(0,1fr) 320px;
+      gap: 0;
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+      position: relative;
+      z-index: 1;
+    }
+    #board-wrapper {
+      padding: 18px;
+      background: #0d121d;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 0;
+      overflow: hidden;
+    }
+    canvas {
+      display: block;
+      margin: auto;
+      background: #111827;
+      border-radius: 8px;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.05);
+      width: 100%;
+      height: auto;
+      max-height: 100%;
+      max-width: 100%;
+    }
+    #ui-panel {
+      padding: 18px 18px 24px;
+      border-left: 1px solid rgba(255,255,255,0.06);
+      background: rgba(10,14,24,0.78);
+      height: 100%;
+      overflow-y: auto;
+      min-height: 0;
+    }
+    .section { margin-bottom: 16px; padding: 12px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; }
+    .section h3 { margin: 0 0 8px; font-size: 14px; letter-spacing: 0.6px; color: var(--muted); text-transform: uppercase; }
+    .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .pill { padding: 8px 12px; border-radius: 999px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); font-size: 13px; }
+    button { border: none; border-radius: 8px; padding: 10px 12px; font-size: 14px; cursor: pointer; background: var(--accent); color: #0c0f16; transition: transform 0.1s ease, box-shadow 0.2s ease; }
+    button.secondary { background: rgba(255,255,255,0.12); color: var(--text); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    button:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 10px 22px rgba(0,0,0,0.25); }
+    .status { padding: 10px 12px; border-radius: 10px; background: rgba(90,169,230,0.1); border: 1px solid rgba(90,169,230,0.2); font-size: 14px; }
+    .move-line { display: flex; gap: 8px; padding: 4px 6px; border-radius: 6px; }
+    .move-line:nth-child(odd) { background: rgba(255,255,255,0.06); }
+    .overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(8,10,16,0.82); backdrop-filter: blur(4px); z-index: 20; }
+    .dialog { background: #0f1623; border: 1px solid rgba(255,255,255,0.08); padding: 20px; border-radius: 12px; width: min(520px, 92%); box-shadow: 0 16px 50px rgba(0,0,0,0.35); }
+    .dialog h2 { margin: 0 0 8px; }
+    .dialog p { margin: 4px 0; color: var(--muted); line-height: 1.6; font-size: 14px; }
+    .options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }
+    .option-active { outline: 2px solid var(--accent-2); outline-offset: 1px; }
+    select { width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.14); background: rgba(255,255,255,0.06); color: var(--text); }
+    label { font-size: 13px; color: var(--muted); display: block; margin-top: 6px; }
+    @media (max-width: 980px) { main { grid-template-columns: 1fr; } #ui-panel { border-left: none; border-top: 1px solid rgba(255,255,255,0.06); } }
+    @media (max-width: 640px) { #board-wrapper { padding: 10px; } header { flex-direction: column; align-items: flex-start; } body { padding: 0; } }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <header>
+      <div>
+        <h1>Medieval European Chess</h1>
+        <p class="subtitle">Old-world chess with ferz and alfil</p>
+      </div>
+      <div class="row">
+        <button class="secondary" id="open-start">Start</button>
+        <button class="secondary" id="open-rules">Rules</button>
+        <button class="secondary" id="btn-restart">Restart</button>
+      </div>
+    </header>
+    <main>
+      <div id="board-wrapper">
+        <canvas id="board" width="720" height="720"></canvas>
+      </div>
+      <div id="ui-panel">
+        <div class="section">
+          <h3>Turn</h3>
+          <div id="turn" class="pill">White to move</div>
+        </div>
+        <div class="section">
+          <h3>Mode</h3>
+          <div class="row" style="gap:12px;">
+            <button id="mode-human" class="secondary">2 Players</button>
+            <button id="mode-ai">Vs AI</button>
+          </div>
+          <label for="difficulty">AI Difficulty</label>
+          <select id="difficulty">
+            <option value="easy">Easy</option>
+            <option value="medium" selected>Medium</option>
+            <option value="hard">Hard</option>
+          </select>
+        </div>
+        <div class="section">
+          <h3>Actions</h3>
+          <div class="row" style="gap:8px;">
+            <button id="btn-undo" class="secondary">Undo</button>
+            <button id="btn-restart-2" class="secondary">Restart</button>
+            <button id="btn-history" class="secondary">History</button>
+          </div>
+        </div>
+        <div class="section">
+          <h3>Status</h3>
+          <div id="status" class="status">Ready</div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div id="start-overlay" class="overlay">
+    <div class="dialog">
+      <h2>Start Game</h2>
+      <p>Choose how to play, set difficulty, then start.</p>
+      <div class="options">
+        <button id="start-human">2 Players</button>
+        <button id="start-ai">Player vs AI</button>
+      </div>
+      <label for="start-difficulty">AI Difficulty</label>
+      <select id="start-difficulty">
+        <option value="easy">Easy</option>
+        <option value="medium" selected>Medium</option>
+        <option value="hard">Hard</option>
+      </select>
+      <div class="row" style="margin-top:12px; justify-content:flex-end;">
+        <button id="btn-start-game" style="min-width:140px;">Start Game</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="rules-overlay" class="overlay" style="display:none;">
+    <div class="dialog">
+      <h2>Rules: Medieval European Chess</h2>
+      <p><strong>Board:</strong> 8x8. White on bottom, Black on top.</p>
+      <p><strong>Pieces:</strong> King, Rook, Knight as modern; Ferz (Queen) moves one step diagonally; Alfil (Bishop) jumps two diagonally; Pawns move/capture forward one, no double-step, no en passant.</p>
+      <p><strong>Castling:</strong> None. Promotion to Ferz on last rank.</p>
+      <p><strong>Goal:</strong> Capture the enemy king (no check/mate enforcement).</p>
+      <div class="row" style="justify-content:flex-end; margin-top:10px;">
+        <button class="secondary" id="close-rules">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="history-overlay" class="overlay" style="display:none;">
+    <div class="dialog">
+      <h2>Move History</h2>
+      <div id="history-list" style="max-height:320px; overflow-y:auto; margin:10px 0;"></div>
+      <div class="row" style="justify-content:flex-end;">
+        <button class="secondary" id="close-history">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  (() => {
+    const COLS = 8;
+    const ROWS = 8;
+    const dpr = window.devicePixelRatio || 1;
+    const LIGHT = 1;
+    const DARK = 2;
+    const PIECE_VALUES = { K: 100, R: 5, N: 3, F: 2, A: 2, P: 1 };
+
+    const container = document.getElementById('board-wrapper');
+    const canvas = document.getElementById('board');
+    const ctx = canvas.getContext('2d');
+
+    const turnEl = document.getElementById('turn');
+    const statusEl = document.getElementById('status');
+    const modeHumanBtn = document.getElementById('mode-human');
+    const modeAiBtn = document.getElementById('mode-ai');
+    const difficultySelect = document.getElementById('difficulty');
+    const startOverlay = document.getElementById('start-overlay');
+    const startHumanBtn = document.getElementById('start-human');
+    const startAiBtn = document.getElementById('start-ai');
+    const startDiffSelect = document.getElementById('start-difficulty');
+    const startGameBtn = document.getElementById('btn-start-game');
+    const historyList = document.getElementById('history-list');
+
+    const state = {
+      board: createEmptyBoard(),
+      turn: LIGHT,
+      moveHistory: [],
+      lastMove: null,
+      captures: { [LIGHT]: 0, [DARK]: 0 },
+      gameOver: false,
+      winner: null,
+      message: 'Ready',
+      cursor: { x: 4, y: ROWS - 1 },
+      selected: null,
+      legal: [],
+      aiEnabled: true,
+      aiColor: DARK,
+      aiLevel: 'medium',
+      thinking: false,
+      menuActive: true,
+      offsetX: 0,
+      offsetY: 0,
+      cell: 0
+    };
+
+    let selectedMode = 'ai';
+    let selectedDiff = 'medium';
+
+    function createEmptyBoard() {
+      return Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+    }
+
+    function p(type, color) { return { type, color }; }
+
+    function resetBoard() {
+      const back = ['R','N','A','F','K','A','N','R'];
+      const b = createEmptyBoard();
+      b[0] = back.map(t => p(t, DARK));
+      b[1] = Array(COLS).fill(p('P', DARK));
+      b[ROWS - 2] = Array(COLS).fill(p('P', LIGHT));
+      b[ROWS - 1] = back.map(t => p(t, LIGHT));
+
+      state.board = b;
+      state.turn = LIGHT;
+      state.moveHistory = [];
+      state.lastMove = null;
+      state.captures = { [LIGHT]: 0, [DARK]: 0 };
+      state.gameOver = false;
+      state.winner = null;
+      state.message = 'Ready';
+      state.selected = null;
+      state.legal = [];
+      state.cursor = { x: 4, y: ROWS - 1 };
+      updateHud();
+    }
+
+    function resize() {
+      const rect = container.getBoundingClientRect();
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      canvas.style.width = rect.width + 'px';
+      canvas.style.height = rect.height + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      const cell = Math.min(rect.width, rect.height) / Math.max(COLS, ROWS);
+      const boardW = cell * COLS;
+      const boardH = cell * ROWS;
+      state.cell = cell;
+      state.offsetX = (rect.width - boardW) / 2;
+      state.offsetY = (rect.height - boardH) / 2;
+
+      render();
+    }
+
+    function drawBoard() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#0f1118';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      for (let y = 0; y < ROWS; y++) {
+        for (let x = 0; x < COLS; x++) {
+          const even = (x + y) % 2 === 0;
+          ctx.fillStyle = even ? '#e6e2d3' : '#b7ad99';
+          ctx.fillRect(state.offsetX + x * state.cell, state.offsetY + y * state.cell, state.cell, state.cell);
+        }
+      }
+    }
+
+    function drawPieces() {
+      ctx.font = `${state.cell * 0.5}px "Segoe UI", sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      for (let y = 0; y < ROWS; y++) {
+        for (let x = 0; x < COLS; x++) {
+          const piece = state.board[y][x];
+          if (!piece) continue;
+          const cx = state.offsetX + x * state.cell + state.cell / 2;
+          const cy = state.offsetY + y * state.cell + state.cell / 2;
+          ctx.fillStyle = piece.color === LIGHT ? '#f5f5f5' : '#111';
+          ctx.strokeStyle = '#000';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.arc(cx, cy, state.cell * 0.38, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = piece.color === LIGHT ? '#111' : '#f5f5f5';
+          ctx.fillText(piece.type, cx, cy + state.cell * 0.04);
+        }
+      }
+
+      if (state.selected) {
+        highlightCell(state.selected.x, state.selected.y, '#c4a04a', 3);
+        state.legal.forEach(m => highlightCell(m.x, m.y, '#ffd166', 2));
+      }
+      if (state.lastMove) {
+        highlightCell(state.lastMove.from.x, state.lastMove.from.y, '#64b5f6', 2);
+        highlightCell(state.lastMove.to.x, state.lastMove.to.y, '#64b5f6', 2);
+      }
+
+      drawCursor();
+    }
+
+    function highlightCell(x, y, color, w) {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = w;
+      ctx.strokeRect(state.offsetX + x * state.cell + 2, state.offsetY + y * state.cell + 2, state.cell - 4, state.cell - 4);
+    }
+
+    function drawCursor() {
+      highlightCell(state.cursor.x, state.cursor.y, '#c4a04a', 2);
+    }
+
+    function onBoard(x, y) { return x >= 0 && x < COLS && y >= 0 && y < ROWS; }
+
+    function genMovesFor(x, y, board) {
+      const piece = board[y][x];
+      if (!piece) return [];
+      const moves = [];
+      const push = (nx, ny) => { if (onBoard(nx, ny) && (!board[ny][nx] || board[ny][nx].color !== piece.color)) moves.push({ x: nx, y: ny }); };
+
+      switch (piece.type) {
+        case 'P': {
+          const dir = piece.color === LIGHT ? -1 : 1;
+          const ny = y + dir;
+          if (onBoard(x, ny) && !board[ny][x]) push(x, ny);
+          for (const dx of [-1, 1]) {
+            const nx = x + dx;
+            if (onBoard(nx, ny) && board[ny][nx] && board[ny][nx].color !== piece.color) push(nx, ny);
+          }
+          break;
+        }
+        case 'R': slide([[1,0],[-1,0],[0,1],[0,-1]], x, y, board, piece.color, moves); break;
+        case 'N': knight(x, y, board, piece.color, moves); break;
+        case 'A': alfil(x, y, board, piece.color, moves); break;
+        case 'F': ferz(x, y, board, piece.color, moves); break;
+        case 'K': king(x, y, board, piece.color, moves); break;
+      }
+      return moves;
+    }
+
+    function slide(dirs, x, y, board, color, out) {
+      for (const [dx, dy] of dirs) {
+        let nx = x + dx, ny = y + dy;
+        while (onBoard(nx, ny)) {
+          if (!board[ny][nx]) out.push({ x: nx, y: ny });
+          else {
+            if (board[ny][nx].color !== color) out.push({ x: nx, y: ny });
+            break;
+          }
+          nx += dx; ny += dy;
+        }
+      }
+    }
+
+    function knight(x, y, board, color, out) {
+      const steps = [[1,2],[2,1],[-1,2],[-2,1],[1,-2],[2,-1],[-1,-2],[-2,-1]];
+      for (const [dx, dy] of steps) {
+        const nx = x + dx, ny = y + dy;
+        if (!onBoard(nx, ny)) continue;
+        if (!board[ny][nx] || board[ny][nx].color !== color) out.push({ x: nx, y: ny });
+      }
+    }
+
+    function ferz(x, y, board, color, out) {
+      for (const [dx, dy] of [[1,1],[1,-1],[-1,1],[-1,-1]]) {
+        const nx = x + dx, ny = y + dy;
+        if (!onBoard(nx, ny)) continue;
+        if (!board[ny][nx] || board[ny][nx].color !== color) out.push({ x: nx, y: ny });
+      }
+    }
+
+    function alfil(x, y, board, color, out) {
+      for (const [dx, dy] of [[2,2],[2,-2],[-2,2],[-2,-2]]) {
+        const nx = x + dx, ny = y + dy;
+        if (!onBoard(nx, ny)) continue;
+        if (!board[ny][nx] || board[ny][nx].color !== color) out.push({ x: nx, y: ny });
+      }
+    }
+
+    function king(x, y, board, color, out) {
+      for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]]) {
+        const nx = x + dx, ny = y + dy;
+        if (!onBoard(nx, ny)) continue;
+        if (!board[ny][nx] || board[ny][nx].color !== color) out.push({ x: nx, y: ny });
+      }
+    }
+
+    function handlePointer(e) {
+      if (state.menuActive) return;
+      const rect = canvas.getBoundingClientRect();
+      const x = Math.floor((e.clientX - rect.left - state.offsetX) / state.cell);
+      const y = Math.floor((e.clientY - rect.top - state.offsetY) / state.cell);
+      if (!onBoard(x, y)) return;
+      state.cursor = { x, y };
+      clickCell(x, y);
+      render();
+      maybeRunAI();
+      updateHud();
+    }
+
+    function clickCell(x, y) {
+      const piece = state.board[y][x];
+      if (state.selected) {
+        const isLegal = state.legal.some(m => m.x === x && m.y === y);
+        if (isLegal) {
+          makeMove(state.selected.x, state.selected.y, x, y);
+          state.selected = null;
+          state.legal = [];
+          return;
+        }
+      }
+      if (piece && piece.color === state.turn) {
+        state.selected = { x, y };
+        state.legal = genMovesFor(x, y, state.board);
+        state.cursor = { x, y };
+        state.message = '';
+      } else {
+        state.selected = null;
+        state.legal = [];
+      }
+    }
+
+    function makeMove(fx, fy, tx, ty) {
+      if (state.gameOver) return;
+      const piece = state.board[fy][fx];
+      const target = state.board[ty][tx];
+      if (!piece) return;
+      const move = { from: { x: fx, y: fy }, to: { x: tx, y: ty }, piece: { ...piece }, captured: target ? { ...target } : null };
+
+      state.board[fy][fx] = null;
+      state.board[ty][tx] = piece;
+
+      if (piece.type === 'P' && ((piece.color === LIGHT && ty === 0) || (piece.color === DARK && ty === ROWS - 1))) {
+        piece.type = 'F';
+        move.promoted = true;
+      }
+
+      if (target) state.captures[piece.color] += PIECE_VALUES[target.type] || 1;
+
+      state.moveHistory.push(move);
+      state.lastMove = move;
+
+      if (target && target.type === 'K') {
+        state.gameOver = true;
+        state.winner = piece.color === LIGHT ? 'White' : 'Black';
+        state.message = `${state.winner} captures the king`;
+        updateHud();
+        return;
+      }
+
+      state.turn = state.turn === LIGHT ? DARK : LIGHT;
+      state.message = '';
+      updateHud();
+    }
+
+    function undoMove() {
+      const mv = state.moveHistory.pop();
+      if (!mv) return;
+      state.board[mv.from.y][mv.from.x] = { ...mv.piece };
+      state.board[mv.to.y][mv.to.x] = mv.captured ? { ...mv.captured } : null;
+      if (mv.promoted) state.board[mv.from.y][mv.from.x].type = 'P';
+      if (mv.captured) state.captures[mv.piece.color] -= PIECE_VALUES[mv.captured.type] || 1;
+      state.turn = mv.piece.color;
+      state.lastMove = state.moveHistory[state.moveHistory.length - 1] || null;
+      state.gameOver = false;
+      state.winner = null;
+      render();
+      updateHud();
+    }
+
+    function moveCursor(dx, dy) {
+      if (state.menuActive) return;
+      state.cursor.x = Math.max(0, Math.min(COLS - 1, state.cursor.x + dx));
+      state.cursor.y = Math.max(0, Math.min(ROWS - 1, state.cursor.y + dy));
+      state.message = '';
+      render();
+    }
+
+    function listMovesForColor(color) {
+      const moves = [];
+      for (let y = 0; y < ROWS; y++) {
+        for (let x = 0; x < COLS; x++) {
+          const pc = state.board[y][x];
+          if (!pc || pc.color !== color) continue;
+          const legal = genMovesFor(x, y, state.board);
+          for (const m of legal) moves.push({ from: { x, y }, to: m, piece: pc });
+        }
+      }
+      return moves;
+    }
+
+    function aiChooseMove() {
+      const moves = listMovesForColor(state.aiColor);
+      if (!moves.length) return null;
+      if (state.aiLevel === 'easy') return moves[Math.floor(Math.random() * moves.length)];
+
+      let best = -Infinity;
+      const scored = [];
+      for (const mv of moves) {
+        const target = state.board[mv.to.y][mv.to.x];
+        const cap = target ? (PIECE_VALUES[target.type] || 1) : 0;
+        let score = cap + Math.random() * 0.05;
+        if (state.aiLevel === 'hard') score += cap * 2 - (PIECE_VALUES[mv.piece.type] || 1) * 0.4;
+        best = Math.max(best, score);
+        scored.push({ mv, score });
+      }
+      const bestMoves = scored.filter(s => s.score >= best - 0.001).map(s => s.mv);
+      return bestMoves[Math.floor(Math.random() * bestMoves.length)];
+    }
+
+    function maybeRunAI() {
+      if (!state.aiEnabled) return;
+      if (state.menuActive) return;
+      if (state.gameOver) return;
+      if (state.turn !== state.aiColor) return;
+      if (state.thinking) return;
+      state.thinking = true;
+      setTimeout(() => {
+        const mv = aiChooseMove();
+        if (mv) makeMove(mv.from.x, mv.from.y, mv.to.x, mv.to.y);
+        state.thinking = false;
+        render();
+        updateHud();
+        maybeRunAI();
+      }, 160);
+    }
+
+    function updateHud() {
+      const turnText = state.turn === LIGHT ? 'White' : 'Black';
+      turnEl.textContent = `${turnText} to move`;
+      statusEl.textContent = state.gameOver && state.winner ? `${state.winner} wins` : (state.message || 'Ready');
+    }
+
+    function showRules() { document.getElementById('rules-overlay').style.display = 'flex'; }
+    function hideRules() { document.getElementById('rules-overlay').style.display = 'none'; }
+
+    function renderHistory() {
+      const sq = (x, y) => `${String.fromCharCode(97 + x)}${ROWS - y}`;
+      historyList.innerHTML = state.moveHistory.map((mv, i) => {
+        const cap = mv.captured ? 'x' : '-';
+        const promo = mv.promoted ? '=F' : '';
+        return `<div class="move-line">${i + 1}. ${sq(mv.from.x, mv.from.y)}${cap}${sq(mv.to.x, mv.to.y)}${promo}</div>`;
+      }).join('');
+    }
+
+    function showHistoryOverlay() { renderHistory(); document.getElementById('history-overlay').style.display = 'flex'; }
+    function hideHistoryOverlay() { document.getElementById('history-overlay').style.display = 'none'; }
+
+    function setMode(mode) {
+      selectedMode = mode;
+      state.aiEnabled = mode === 'ai';
+      state.aiColor = DARK;
+      modeHumanBtn.classList.toggle('secondary', mode !== 'human');
+      modeAiBtn.classList.toggle('secondary', mode !== 'ai');
+      state.menuActive = false;
+      updateHud();
+      maybeRunAI();
+    }
+
+    function changeDifficulty(e) {
+      selectedDiff = e.target.value;
+      state.aiLevel = selectedDiff;
+      startDiffSelect.value = selectedDiff;
+      updateHud();
+    }
+
+    function selectStartMode(mode) {
+      selectedMode = mode;
+      startHumanBtn.classList.toggle('option-active', mode === 'human');
+      startAiBtn.classList.toggle('option-active', mode === 'ai');
+      modeHumanBtn.classList.toggle('secondary', mode !== 'human');
+      modeAiBtn.classList.toggle('secondary', mode !== 'ai');
+    }
+
+    function startGame() {
+      state.aiLevel = startDiffSelect.value;
+      difficultySelect.value = state.aiLevel;
+      setMode(selectedMode);
+      state.menuActive = false;
+      startOverlay.style.display = 'none';
+      resetBoard();
+      render();
+      updateHud();
+      maybeRunAI();
+    }
+
+    function restartGame() {
+      state.menuActive = false;
+      resetBoard();
+      render();
+      updateHud();
+      maybeRunAI();
+    }
+
+    function render() {
+      drawBoard();
+      drawPieces();
+    }
+
+    function handleKey(e) {
+      const k = e.key.toLowerCase();
+      if (k === 'arrowup') moveCursor(0, -1);
+      else if (k === 'arrowdown') moveCursor(0, 1);
+      else if (k === 'arrowleft') moveCursor(-1, 0);
+      else if (k === 'arrowright') moveCursor(1, 0);
+      else if (k === 'enter' || k === ' ') {
+        clickCell(state.cursor.x, state.cursor.y);
+        render();
+        maybeRunAI();
+        updateHud();
+      }
+      else if (k === 'u') undoMove();
+    }
+
+    // Initial setup
+    resetBoard();
+    resize();
+    selectStartMode(selectedMode);
+    startOverlay.style.display = 'flex';
+    render();
+    updateHud();
+
+    // Event bindings
+    canvas.addEventListener('mousedown', handlePointer);
+    window.addEventListener('resize', resize);
+    document.getElementById('open-start').addEventListener('click', () => { state.menuActive = true; startOverlay.style.display = 'flex'; });
+    document.getElementById('open-rules').addEventListener('click', showRules);
+    document.getElementById('close-rules').addEventListener('click', hideRules);
+    document.getElementById('btn-history').addEventListener('click', showHistoryOverlay);
+    document.getElementById('close-history').addEventListener('click', hideHistoryOverlay);
+    document.getElementById('btn-undo').addEventListener('click', undoMove);
+    document.getElementById('btn-restart').addEventListener('click', restartGame);
+    document.getElementById('btn-restart-2').addEventListener('click', restartGame);
+    difficultySelect.addEventListener('change', changeDifficulty);
+    startHumanBtn.addEventListener('click', () => selectStartMode('human'));
+    startAiBtn.addEventListener('click', () => selectStartMode('ai'));
+    startGameBtn.addEventListener('click', startGame);
+    startDiffSelect.addEventListener('change', e => { selectedDiff = e.target.value; state.aiLevel = selectedDiff; difficultySelect.value = selectedDiff; });
+    modeHumanBtn.addEventListener('click', () => setMode('human'));
+    modeAiBtn.addEventListener('click', () => setMode('ai'));
+    document.addEventListener('keydown', handleKey);
+
+    // Expose for inline handlers if any
+    window.showRules = showRules;
+    window.hideRules = hideRules;
+    window.showHistoryOverlay = showHistoryOverlay;
+    window.hideHistoryOverlay = hideHistoryOverlay;
+    window.restartGame = restartGame;
+    window.undoMove = undoMove;
+  })();
+  </script>
+</body>
+	</html>
