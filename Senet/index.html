@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Senet</title>
+<style>
+  html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #0d1117; color: #e8edf5; font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif; overflow: hidden; }
+  #game-container { position: relative; width: 100vw; height: 100vh; overflow: hidden; background: radial-gradient(circle at 30% 25%, #1f2937 0%, #0d1117 55%); }
+  canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .layer-board { z-index: 0; pointer-events: none; }
+  .layer-pieces { z-index: 1; pointer-events: none; }
+  .layer-ui { z-index: 2; }
+  #hud { position: absolute; top: 10px; left: 10px; z-index: 5; display: flex; flex-direction: column; gap: 8px; }
+  .panel { background: rgba(0,0,0,0.55); border: 1px solid #2d3340; border-radius: 10px; padding: 10px 12px; min-width: 240px; box-shadow: 0 10px 28px rgba(0,0,0,0.35); }
+  .panel h4 { margin: 0 0 6px 0; font-size: 13px; letter-spacing: 0.4px; color: #ffd166; }
+  .panel p { margin: 4px 0; font-size: 13px; }
+  #controls { display: flex; gap: 8px; flex-wrap: wrap; }
+  #controls button { padding: 8px 10px; border: none; border-radius: 8px; background: #252b3a; color: #e8edf5; cursor: pointer; font-size: 13px; }
+  #controls button.primary { background: linear-gradient(135deg, #66d9ff, #4f7cff); color: #0a0c12; }
+  #controls button:disabled { opacity: 0.55; cursor: not-allowed; }
+  .history-panel { position: relative; max-height: 220px; overflow-y: auto; font-family: monospace; font-size: 12px; }
+  .history-panel .move-line { margin: 2px 0; }
+  .history-close { position: absolute; top: 6px; right: 6px; padding: 4px 8px; border: none; border-radius: 6px; background: #252b3a; color: #e8edf5; cursor: pointer; font-size: 11px; }
+  #btn-history { display: none; }
+  @media (max-width: 760px) {
+    #hud { position: fixed; top: auto; bottom: 0; left: 0; right: 0; flex-direction: row; gap: 6px; padding: 6px; background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.45) 40%); backdrop-filter: blur(8px); }
+    #hud .panel { min-width: 0; flex: 1; }
+    #history { display: none; position: fixed; right: 8px; bottom: 78px; width: 82vw; max-width: 380px; max-height: 55vh; z-index: 12; background: rgba(0,0,0,0.85); border-radius: 10px; }
+    #history.show { display: block; }
+    #btn-history { display: inline-block; }
+  }
+  #start-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.6); z-index: 10; backdrop-filter: blur(2px); }
+  #start-card { background: #171b24; border: 1px solid #2d3340; border-radius: 12px; padding: 18px 22px; color: #f5f7fb; min-width: 300px; box-shadow: 0 12px 30px rgba(0,0,0,0.35); }
+  #start-card h2 { margin: 0 0 10px 0; font-size: 20px; }
+  #start-card p { margin: 0 0 12px 0; font-size: 14px; color: #cfd5e0; }
+  #start-card .btn-row { display: flex; gap: 10px; margin-top: 10px; }
+  #start-card button { flex: 1; padding: 10px 12px; border: none; border-radius: 8px; background: linear-gradient(135deg, #66d9ff, #4f7cff); color: #0a0c12; font-weight: 700; cursor: pointer; }
+  #start-card button.secondary { background: #2d3340; color: #f5f7fb; }
+  #start-card button.active { outline: 2px solid #fff; }
+  #rules-overlay { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.7); z-index: 11; }
+  #rules-overlay.show { display: flex; }
+  #rules-card { background: #171b24; border: 1px solid #2d3340; border-radius: 12px; padding: 18px 22px; color: #f5f7fb; max-width: 760px; width: 90%; box-shadow: 0 12px 30px rgba(0,0,0,0.35); line-height: 1.45; }
+  #rules-card h3 { margin: 0 0 8px 0; font-size: 18px; }
+  #rules-card ul { margin: 8px 0 0 18px; padding: 0; }
+  #rules-card li { margin: 4px 0; }
+  #close-rules { margin-top: 12px; padding: 8px 12px; border: none; border-radius: 8px; background: #2d3340; color: #fff; cursor: pointer; }
+</style>
+</head>
+<body>
+<div id="game-container">
+  <div id="hud">
+    <div class="panel">
+      <h4>Status</h4>
+      <p id="turn-text">Turn: --</p>
+      <p id="ai-text">AI: --</p>
+      <p id="msg-text">Ready</p>
+      <p id="roll-text">Roll: --</p>
+    </div>
+    <div id="controls" class="panel">
+      <button id="btn-start" class="primary">New Game</button>
+      <button id="btn-roll">Roll</button>
+      <button id="btn-undo">Undo</button>
+      <button id="btn-history">History</button>
+      <button id="btn-rules">Rules</button>
+    </div>
+    <div id="history" class="panel history-panel">
+      <h4>Moves</h4>
+      <button id="btn-history-close" class="history-close">Close</button>
+      <div id="move-list"></div>
+    </div>
+  </div>
+
+  <div id="start-overlay">
+    <div id="start-card">
+      <h2>Senet</h2>
+      <p>Ancient race game. Choose players, difficulty, then Start.</p>
+      <div class="btn-row">
+        <button id="btn-1p">1 Player (vs AI)</button>
+        <button id="btn-2p" class="secondary">2 Players</button>
+      </div>
+      <p style="margin-top:12px; margin-bottom:6px;">AI Difficulty</p>
+      <div class="btn-row">
+        <button id="btn-easy" class="secondary">Easy</button>
+        <button id="btn-med" class="active">Medium</button>
+      </div>
+      <p style="margin-top:12px; margin-bottom:6px;">Start</p>
+      <div class="btn-row" style="margin-top:8px;">
+        <button id="btn-start-overlay" class="primary">Start Game</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="rules-overlay">
+    <div id="rules-card">
+      <h3>Rules (Simplified Senet)</h3>
+      <ul>
+        <li>Board: 30 squares along a 3x10 serpentine path (1-10 L→R, 11-20 R→L, 21-30 L→R).</li>
+        <li>Setup: 5 light on 1,3,5,7,9; 5 dark on 2,4,6,8,10.</li>
+        <li>Roll sticks for 1-5. Extra turn on 1, 4, or 5. You must roll before moving.</li>
+        <li>Move one piece forward exactly the roll; exact roll required to exit from square 30.</li>
+        <li>Capture by swapping if landing on a lone enemy that is not on a safe square and not protected by an adjacent ally.</li>
+        <li>Safe squares: 26–29 cannot be captured. Square 15 is water; landing there sends the piece back to the first empty start square.</li>
+        <li>Two adjacent allies protect each other from capture.</li>
+        <li>Win by bearing off all your pieces.</li>
+      </ul>
+      <button id="close-rules">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  const COLS = 10;
+  const ROWS = 3;
+  const LIGHT = "light";
+  const DARK = "dark";
+  const dpr = window.devicePixelRatio || 1;
+
+  const container = document.getElementById("game-container");
+  const boardLayer = document.createElement("canvas");
+  const piecesLayer = document.createElement("canvas");
+  const uiLayer = document.createElement("canvas");
+  boardLayer.className = "layer-board";
+  piecesLayer.className = "layer-pieces";
+  uiLayer.className = "layer-ui";
+  container.appendChild(boardLayer);
+  container.appendChild(piecesLayer);
+  container.appendChild(uiLayer);
+
+  const turnEl = document.getElementById("turn-text");
+  const aiEl = document.getElementById("ai-text");
+  const msgEl = document.getElementById("msg-text");
+  const rollEl = document.getElementById("roll-text");
+  const moveList = document.getElementById("move-list");
+  const historyPanel = document.getElementById("history");
+  const btnHistory = document.getElementById("btn-history");
+  const btnHistoryClose = document.getElementById("btn-history-close");
+  const btnStart = document.getElementById("btn-start");
+  const btnRoll = document.getElementById("btn-roll");
+  const btnUndo = document.getElementById("btn-undo");
+  const btnRules = document.getElementById("btn-rules");
+  const rulesOverlay = document.getElementById("rules-overlay");
+  const btnCloseRules = document.getElementById("close-rules");
+  const startOverlay = document.getElementById("start-overlay");
+  const btn1p = document.getElementById("btn-1p");
+  const btn2p = document.getElementById("btn-2p");
+  const btnEasy = document.getElementById("btn-easy");
+  const btnMed = document.getElementById("btn-med");
+  const btnStartOverlay = document.getElementById("btn-start-overlay");
+
+  const layout = { width: 0, height: 0, cell: 0, offsetX: 0, offsetY: 0 };
+
+  const state = {
+    board: Array(30).fill(null),
+    pieces: [],
+    turn: LIGHT,
+    gameOver: false,
+    menuActive: true,
+    vsAI: true,
+    aiLevel: "medium",
+    roll: null,
+    moveHistory: [],
+    lastMove: null,
+    _undo: []
+  };
+
+  initPieces();
+  attachUI();
+  resize();
+  showStart();
+  updateHud();
+  renderAll();
+  requestAnimationFrame(loop);
+
+  function initPieces() {
+    state.pieces = [];
+    state.board = Array(30).fill(null);
+    [0,2,4,6,8].forEach(i => placePiece(LIGHT, i));
+    [1,3,5,7,9].forEach(i => placePiece(DARK, i));
+  }
+
+  function placePiece(color, idx) {
+    const id = state.pieces.length;
+    state.pieces.push({ id, color, pos: idx, off: false });
+    state.board[idx] = id;
+  }
+
+  function attachUI() {
+    btnStart.addEventListener("click", showStart);
+    btnRoll.addEventListener("click", () => rollSticks(false));
+    btnUndo.addEventListener("click", undo);
+    btnHistory?.addEventListener("click", () => toggleHistory(true));
+    btnHistoryClose?.addEventListener("click", () => toggleHistory(false));
+    btnRules.addEventListener("click", () => rulesOverlay.classList.add("show"));
+    btnCloseRules.addEventListener("click", () => rulesOverlay.classList.remove("show"));
+    btn1p.addEventListener("click", () => setPlayers(true));
+    btn2p.addEventListener("click", () => setPlayers(false));
+    btnEasy.addEventListener("click", () => setDifficulty("easy"));
+    btnMed.addEventListener("click", () => setDifficulty("medium"));
+    btnStartOverlay.addEventListener("click", startFromOverlay);
+    uiLayer.addEventListener("mousedown", handlePointer);
+    window.addEventListener("keydown", handleKey);
+    window.addEventListener("resize", () => { resize(); renderAll(); });
+    setPlayers(state.vsAI);
+    setDifficulty(state.aiLevel);
+  }
+
+  function showStart() { state.menuActive = true; startOverlay.style.display = "flex"; uiLayer.style.pointerEvents = "none"; }
+  function hideStart() { state.menuActive = false; startOverlay.style.display = "none"; uiLayer.style.pointerEvents = "auto"; }
+  function setPlayers(vsAI) {
+    state.vsAI = vsAI;
+    btn1p.classList.toggle("secondary", !vsAI);
+    btn2p.classList.toggle("secondary", vsAI);
+    btn1p.classList.toggle("active", vsAI);
+    btn2p.classList.toggle("active", !vsAI);
+    updateHud();
+  }
+  function setDifficulty(level) {
+    state.aiLevel = level;
+    btnEasy.classList.toggle("active", level === "easy");
+    btnMed.classList.toggle("active", level === "medium");
+    btnEasy.classList.toggle("secondary", level !== "easy");
+    btnMed.classList.toggle("secondary", level !== "medium");
+    updateHud();
+  }
+  function startFromOverlay() { restart(); hideStart(); }
+
+  function restart() {
+    initPieces();
+    state.turn = LIGHT;
+    state.gameOver = false;
+    state.roll = null;
+    state.moveHistory = [];
+    state.lastMove = null;
+    state._undo = [];
+    updateHud();
+    renderHistory();
+    renderAll();
+  }
+
+  function loop() {
+    if (!state.menuActive && !state.gameOver && state.vsAI && state.turn === DARK) {
+      if (state.roll === null) {
+        rollSticks(true);
+      } else {
+        aiMove();
+      }
+    }
+    renderAll();
+    requestAnimationFrame(loop);
+  }
+
+  function rollSticks(auto) {
+    if (state.gameOver || state.menuActive) return;
+    if (state.vsAI && state.turn === DARK && !auto) return;
+    if (state.roll !== null) return;
+    const outcomes = [1,1,1,1,2,2,2,2,2,2,3,3,3,3,4,5];
+    state.roll = outcomes[Math.floor(Math.random() * outcomes.length)];
+    msgEl.textContent = "Select a piece to move";
+    updateHud();
+  }
+
+  function legalMovesFor(color, roll) {
+    const moves = [];
+    for (const pc of state.pieces) {
+      if (pc.off || pc.color !== color) continue;
+      const target = pc.pos + roll;
+      if (target > 29) continue;
+      if (state.board[target] !== null) {
+        const oppId = state.board[target];
+        const opp = state.pieces[oppId];
+        if (opp.color === color) continue;
+        if (isSafe(target)) continue;
+        if (isProtected(target, opp.color)) continue;
+      }
+      moves.push({ id: pc.id, from: pc.pos, to: target });
+    }
+    return moves;
+  }
+
+  function handlePointer(e) {
+    if (e.button !== 0) return;
+    if (state.menuActive || state.gameOver) return;
+    if (state.vsAI && state.turn === DARK) return;
+    if (state.roll === null) { msgEl.textContent = "Roll first"; return; }
+    const pos = pickCell(e.offsetX, e.offsetY);
+    if (pos === null) return;
+    const pid = state.board[pos];
+    if (pid === null) return;
+    const pc = state.pieces[pid];
+    if (pc.color !== state.turn) return;
+    tryMove(pc.id, state.roll);
+  }
+
+  function handleKey(e) {
+    const k = e.key.toLowerCase();
+    if (k === "r") restart();
+    if (k === "u") undo();
+    if (k === "h") toggleHistory(true);
+    if (k === "escape") toggleHistory(false);
+    if (k === " ") rollSticks(false);
+  }
+
+  function tryMove(pid, roll) {
+    const pc = state.pieces[pid];
+    if (pc.off || pc.color !== state.turn || roll === null) return;
+    const moves = legalMovesFor(state.turn, roll);
+    const m = moves.find(x => x.id === pid);
+    if (!m) return;
+    pushUndo();
+    applyMove(m, roll);
+    afterMove(roll);
+  }
+
+  function applyMove(mv, roll) {
+    const { id, from, to } = mv;
+    const pc = state.pieces[id];
+    if (state.board[to] !== null) {
+      const oppId = state.board[to];
+      state.board[to] = null;
+      state.pieces[oppId].pos = from;
+      state.board[from] = oppId;
+    } else {
+      state.board[from] = null;
+    }
+    pc.pos = to;
+    state.board[to] = id;
+    if (to === 29) { pc.off = true; state.board[to] = null; }
+    if (to === 14) { const dest = findFirstEmptyStart(); state.board[to] = null; pc.pos = dest; pc.off = false; state.board[dest] = id; }
+    state.lastMove = { id, from, to, roll };
+    state.moveHistory.push(formatHistory(state.turn, from, to, roll));
+    renderHistory();
+  }
+
+  function afterMove(roll) {
+    state.roll = null;
+    if (checkWin()) {
+      state.gameOver = true;
+      msgEl.textContent = `${state.turn === LIGHT ? "Light" : "Dark"} wins`;
+      updateHud();
+      return;
+    }
+    const extra = roll === 1 || roll === 4 || roll === 5;
+    if (!extra) state.turn = state.turn === LIGHT ? DARK : LIGHT;
+    msgEl.textContent = extra ? "Extra turn" : "";
+    updateHud();
+  }
+
+  function checkWin() {
+    return state.pieces.filter(p => p.color === state.turn && !p.off).length === 0;
+  }
+
+  function isProtected(idx, color) {
+    const left = idx - 1 >= 0 ? state.board[idx - 1] : null;
+    const right = idx + 1 <= 29 ? state.board[idx + 1] : null;
+    const leftSame = left !== null && state.pieces[left].color === color;
+    const rightSame = right !== null && state.pieces[right].color === color;
+    return leftSame || rightSame;
+  }
+
+  function isSafe(idx) { return idx >= 25 && idx <= 28; }
+
+  function findFirstEmptyStart() {
+    for (let i = 0; i <= 4; i++) if (state.board[i] === null) return i;
+    for (let i = 0; i < 30; i++) if (state.board[i] === null) return i;
+    return 0;
+  }
+
+  function pushUndo() {
+    state._undo.push(JSON.stringify({
+      board: state.board,
+      pieces: state.pieces,
+      turn: state.turn,
+      roll: state.roll,
+      gameOver: state.gameOver,
+      moveHistory: state.moveHistory,
+      lastMove: state.lastMove
+    }));
+    if (state._undo.length > 40) state._undo.shift();
+  }
+
+  function undo() {
+    const snap = state._undo.pop();
+    if (!snap) return;
+    const s = JSON.parse(snap);
+    state.board = s.board;
+    state.pieces = s.pieces;
+    state.turn = s.turn;
+    state.roll = s.roll;
+    state.gameOver = s.gameOver;
+    state.moveHistory = s.moveHistory;
+    state.lastMove = s.lastMove;
+    updateHud();
+    renderHistory();
+  }
+
+  function aiMove() {
+    const roll = state.roll;
+    const moves = legalMovesFor(DARK, roll);
+    if (!moves.length) { state.roll = null; state.turn = LIGHT; updateHud(); return; }
+    let choice = moves[0];
+    if (state.aiLevel === "easy") {
+      choice = moves[Math.floor(Math.random() * moves.length)];
+    } else {
+      const scored = moves.map(m => ({ m, score: scoreMove(m) }));
+      scored.sort((a, b) => b.score - a.score);
+      choice = scored[0].m;
+    }
+    pushUndo();
+    applyMove(choice, roll);
+    afterMove(roll);
+  }
+
+  function scoreMove(mv) {
+    const target = mv.to;
+    let s = target;
+    if (isSafe(target)) s += 10;
+    if (target === 29) s += 50;
+    if (state.board[target] !== null) s += 15;
+    return s + Math.random();
+  }
+
+  function pickCell(px, py) {
+    const x = Math.floor((px - layout.offsetX) / layout.cell);
+    const y = Math.floor((py - layout.offsetY) / layout.cell);
+    if (x < 0 || x >= COLS || y < 0 || y >= ROWS) return null;
+    return gridToIndex(x, y);
+  }
+
+  function gridToIndex(x, y) { return y === 0 ? x : (y === 1 ? 19 - x : 20 + x); }
+  function indexToGrid(idx) { if (idx <= 9) return { x: idx, y: 0 }; if (idx <= 19) return { x: 19 - idx, y: 1 }; return { x: idx - 20, y: 2 }; }
+
+  function resize() {
+    layout.width = window.innerWidth;
+    layout.height = window.innerHeight;
+    [boardLayer, piecesLayer, uiLayer].forEach(c => {
+      c.width = layout.width * dpr;
+      c.height = layout.height * dpr;
+      c.style.width = `${layout.width}px`;
+      c.style.height = `${layout.height}px`;
+      const ctx = c.getContext("2d");
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    });
+    layout.cell = Math.min(layout.width / (COLS + 2), layout.height / (ROWS + 2));
+    layout.offsetX = (layout.width - layout.cell * COLS) / 2;
+    layout.offsetY = (layout.height - layout.cell * ROWS) / 2;
+  }
+
+  function drawBoard(ctx) {
+    ctx.clearRect(0, 0, layout.width, layout.height);
+    const grad = ctx.createLinearGradient(0, 0, layout.width, layout.height);
+    grad.addColorStop(0, "#1f2838");
+    grad.addColorStop(1, "#0e121a");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, layout.width, layout.height);
+    ctx.strokeStyle = "#65708a";
+    ctx.lineWidth = 2;
+    ctx.font = `${Math.floor(layout.cell * 0.3)}px system-ui, sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    for (let y = 0; y < ROWS; y++) {
+      for (let x = 0; x < COLS; x++) {
+        const cx = layout.offsetX + x * layout.cell;
+        const cy = layout.offsetY + y * layout.cell;
+        ctx.fillStyle = ((x + y) % 2 === 0) ? "#2c3650" : "#192234";
+        ctx.fillRect(cx, cy, layout.cell - 2, layout.cell - 2);
+        ctx.strokeStyle = "#7a86a3";
+        ctx.strokeRect(cx, cy, layout.cell - 2, layout.cell - 2);
+        const idx = gridToIndex(x, y);
+        ctx.fillStyle = idx === 14 ? "#4e7cc7" : (isSafe(idx) ? "#3fa45e" : "#e7ecf4");
+        ctx.fillText(`${idx + 1}`, cx + layout.cell / 2 - 1, cy + layout.cell / 2 - 1);
+      }
+    }
+  }
+
+  function drawPieces(ctx) {
+    ctx.clearRect(0, 0, layout.width, layout.height);
+    for (const pc of state.pieces) {
+      if (pc.off) continue;
+      const { x, y } = indexToGrid(pc.pos);
+      const cx = layout.offsetX + x * layout.cell + layout.cell / 2;
+      const cy = layout.offsetY + y * layout.cell + layout.cell / 2;
+      const r = layout.cell * 0.35;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fillStyle = pc.color === LIGHT ? "#f0d87a" : "#69b7ff";
+      ctx.fill();
+      ctx.strokeStyle = "#0a0c12";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+  }
+
+  function drawUI(ctx) {
+    ctx.clearRect(0, 0, layout.width, layout.height);
+    if (state.roll !== null && !state.gameOver) {
+      const moves = legalMovesFor(state.turn, state.roll);
+      ctx.fillStyle = "rgba(102, 217, 255, 0.6)";
+      for (const mv of moves) {
+        const { x, y } = indexToGrid(mv.to);
+        const cx = layout.offsetX + x * layout.cell + layout.cell / 2;
+        const cy = layout.offsetY + y * layout.cell + layout.cell / 2;
+        ctx.beginPath();
+        ctx.arc(cx, cy, layout.cell * 0.12, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+
+  function renderAll() {
+    drawBoard(boardLayer.getContext("2d"));
+    drawPieces(piecesLayer.getContext("2d"));
+    drawUI(uiLayer.getContext("2d"));
+  }
+
+  function renderHistory() {
+    if (!moveList) return;
+    moveList.innerHTML = "";
+    state.moveHistory.forEach((m, idx) => {
+      const div = document.createElement("div");
+      div.className = "move-line";
+      div.textContent = `${idx + 1}. ${m}`;
+      moveList.appendChild(div);
+    });
+  }
+
+  function toggleHistory(show) { if (!historyPanel) return; historyPanel.classList.toggle("show", show); }
+
+  function updateHud() {
+    turnEl.textContent = `Turn: ${state.turn === LIGHT ? "Light" : "Dark"}`;
+    aiEl.textContent = state.vsAI ? `AI: ${state.aiLevel}` : "AI: Off";
+    rollEl.textContent = `Roll: ${state.roll === null ? "--" : state.roll}`;
+  }
+
+  function formatHistory(color, from, to, roll) {
+    const side = color === LIGHT ? "L" : "D";
+    return `${side} ${from + 1}->${to + 1} (r${roll})`;
+  }
+
+})();
+</script>
+</body>
+</html>
