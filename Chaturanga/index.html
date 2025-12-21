@@ -2,28 +2,36 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Chaturanga – Standalone</title>
 <style>
-	html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #0f0f12; color: #eee; font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif; }
+	html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #0f0f12; color: #eee; font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif; font-size: 16px; }
 	#game-container { position: relative; width: 100vw; height: 100vh; background: #0f0f12; overflow: hidden; }
 	canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 	.layer-board { z-index: 0; pointer-events: none; }
 	.layer-pieces { z-index: 1; pointer-events: none; }
 	.layer-ui { z-index: 2; }
+	#top-bar { position: absolute; top: 0; left: 0; right: 0; height: 56px; padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; gap: 10px; background: linear-gradient(90deg, rgba(124,77,255,0.24), rgba(0,0,0,0.55)); border-bottom: 1px solid rgba(255,255,255,0.08); z-index: 6; box-shadow: 0 10px 30px rgba(0,0,0,0.35); }
+	#top-bar .title { font-size: 20px; font-weight: 700; letter-spacing: 0.4px; color: #ffd166; }
+	#top-bar .subtitle { font-size: 13px; color: #a9b6d2; margin-top: 2px; }
+	#top-bar .title-wrap { display: flex; flex-direction: column; }
+	#top-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+	.pill-btn { padding: 8px 11px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.14); background: rgba(255,255,255,0.12); color: #f5f5f5; cursor: pointer; font-size: 14px; }
+	.pill-btn.primary { background: linear-gradient(135deg, #7c4dff, #512da8); color: #fff; border-color: rgba(255,255,255,0.2); }
 	#start-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.7); z-index: 10; }
-	#start-card { background: #1d1d1f; border: 1px solid #333; border-radius: 12px; padding: 18px 22px; color: #f5f5f5; min-width: 300px; box-shadow: 0 12px 30px rgba(0,0,0,0.35); }
-	#start-card h2 { margin: 0 0 10px 0; font-size: 20px; }
-	#start-card p { margin: 0 0 12px 0; font-size: 14px; color: #ccc; }
+	#start-card { background: #1d1d1f; border: 1px solid #333; border-radius: 12px; padding: 20px 22px; color: #f5f5f5; min-width: 320px; box-shadow: 0 12px 30px rgba(0,0,0,0.35); }
+	#start-card h2 { margin: 0 0 12px 0; font-size: 22px; }
+	#start-card p { margin: 0 0 12px 0; font-size: 15px; color: #ccc; }
 	#start-card .btn-row { display: flex; gap: 10px; margin-top: 10px; }
-	#start-card button { flex: 1; padding: 10px 12px; border: none; border-radius: 8px; background: linear-gradient(135deg, #7c4dff, #512da8); color: #fff; font-weight: 700; cursor: pointer; }
+	#start-card button { flex: 1; padding: 11px 13px; border: none; border-radius: 10px; background: linear-gradient(135deg, #7c4dff, #512da8); color: #fff; font-weight: 700; cursor: pointer; font-size: 15px; }
 	#start-card button.secondary { background: #444; }
 	#start-card button.active { outline: 2px solid #fff; }
-	#hud { position: absolute; top: 10px; left: 10px; z-index: 5; display: flex; flex-direction: column; gap: 8px; }
-	.panel { background: rgba(0,0,0,0.5); border: 1px solid #333; border-radius: 10px; padding: 10px 12px; min-width: 220px; color: #eee; box-shadow: 0 8px 20px rgba(0,0,0,0.3); }
-	.panel h4 { margin: 0 0 6px 0; font-size: 13px; letter-spacing: 0.5px; color: #9cf; }
-	.panel p { margin: 4px 0; font-size: 13px; }
+	#hud { position: absolute; top: 64px; left: 10px; z-index: 5; display: flex; flex-direction: column; gap: 10px; }
+	.panel { background: rgba(0,0,0,0.58); border: 1px solid #333; border-radius: 12px; padding: 12px 14px; min-width: 240px; color: #eee; box-shadow: 0 8px 20px rgba(0,0,0,0.3); font-size: 15px; }
+	.panel h4 { margin: 0 0 6px 0; font-size: 15px; letter-spacing: 0.4px; color: #9cf; }
+	.panel p { margin: 4px 0; font-size: 15px; }
 	#controls { display: flex; gap: 8px; flex-wrap: wrap; }
-	#controls button { padding: 8px 10px; border: none; border-radius: 8px; background: #2d2d33; color: #eee; cursor: pointer; font-size: 13px; }
+	#controls button { padding: 9px 11px; border: none; border-radius: 10px; background: #2d2d33; color: #eee; cursor: pointer; font-size: 14px; }
 	#controls button.primary { background: linear-gradient(135deg, #7c4dff, #512da8); color: #fff; }
 	.history-panel { position: relative; max-height: 240px; overflow-y: auto; font-family: monospace; font-size: 12px; }
 	.history-panel .move-line { margin: 2px 0; }
@@ -41,16 +49,38 @@
 	/* Mobile layout to avoid history overlap */
 	#btn-history { display: none; }
 	@media (max-width: 720px) {
-		#hud { position: fixed; top: auto; bottom: 0; left: 0; right: 0; flex-direction: row; gap: 6px; padding: 6px; background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.45) 40%); backdrop-filter: blur(8px); }
-		#hud .panel { min-width: 0; flex: 1; }
-		#history { display: none; position: fixed; right: 8px; bottom: 78px; width: 80vw; max-width: 360px; max-height: 55vh; z-index: 12; background: rgba(0,0,0,0.8); border-radius: 10px; }
+		html, body { font-size: 17px; }
+		#top-bar { height: 58px; padding: 12px 14px; gap: 8px; }
+		#top-bar .title { font-size: 19px; }
+		#top-bar .subtitle { font-size: 13px; }
+		#top-actions { gap: 6px; }
+		.pill-btn { font-size: 14px; padding: 8px 10px; }
+		#hud { position: fixed; top: auto; bottom: 0; left: 0; right: 0; flex-direction: row; gap: 6px; padding: 8px; background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.45) 40%); backdrop-filter: blur(8px); }
+		#hud .panel { min-width: 0; flex: 1; font-size: 15px; }
+		.panel h4 { font-size: 15px; }
+		.panel p { font-size: 15px; }
+		#history { display: none; position: fixed; right: 8px; bottom: 88px; width: 82vw; max-width: 360px; max-height: 55vh; z-index: 12; background: rgba(0,0,0,0.86); border-radius: 12px; }
 		#history.show { display: block; }
 		#btn-history { display: inline-block; }
+		#start-card { min-width: 0; width: 92vw; }
+		#start-card h2 { font-size: 24px; }
+		#start-card p, #start-card button { font-size: 16px; }
 	}
 </style>
 </head>
 <body>
 <div id="game-container">
+	<div id="top-bar">
+		<div class="title-wrap">
+			<div class="title">Chaturanga</div>
+			<div class="subtitle">Roots of chess</div>
+		</div>
+		<div id="top-actions">
+			<button id="top-start" class="pill-btn primary">Start</button>
+			<button id="top-rules" class="pill-btn">Rules</button>
+			<button id="top-reset" class="pill-btn">Reset</button>
+		</div>
+	</div>
 	<div id="hud">
 		<div class="panel">
 			<h4>Status</h4>
@@ -130,6 +160,9 @@
 	const btnRules = document.getElementById("btn-rules");
 	const rulesOverlay = document.getElementById("rules-overlay");
 	const closeRules = document.getElementById("close-rules");
+	const topStart = document.getElementById("top-start");
+	const topRules = document.getElementById("top-rules");
+	const topReset = document.getElementById("top-reset");
 	const hudBtnStart = document.getElementById("btn-start");
 	const hudBtnReset = document.getElementById("btn-reset");
 	const hudBtnUndo = document.getElementById("btn-undo");
@@ -730,6 +763,9 @@
 	btnStartOverlay.addEventListener("click", startSelected);
 	btnRules.addEventListener("click", () => toggleRules(true));
 	closeRules.addEventListener("click", () => toggleRules(false));
+	if (topStart) topStart.addEventListener("click", showStartOverlay);
+	if (topRules) topRules.addEventListener("click", () => toggleRules(true));
+	if (topReset) topReset.addEventListener("click", () => { resetGame(); render(); updateHud(); });
 	hudBtnStart.addEventListener("click", showStartOverlay);
 	hudBtnReset.addEventListener("click", () => { resetGame(); render(); updateHud(); });
 	hudBtnUndo.addEventListener("click", () => { undo(); render(); updateHud(); });
