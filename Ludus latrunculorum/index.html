@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>Ludus Latrunculorum</title>
+	<style>
+		:root {
+			--bg: #0c0f16;
+			--panel: #141a26;
+			--accent: #c4a04a;
+			--accent-2: #5aa9e6;
+			--grid-light: #e6e2d3;
+			--grid-dark: #b7ad99;
+			--text: #f5f7fb;
+			--muted: #9aa7bd;
+			--danger: #e05d5d;
+		}
+		* { box-sizing: border-box; }
+		body {
+			margin: 0;
+			background: radial-gradient(circle at 20% 20%, #121828, #0c0f16 40%);
+			font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+			color: var(--text);
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			min-height: 100vh;
+			height: 100vh;
+			padding: 0;
+			overflow: hidden;
+		}
+		#app {
+			width: 100%;
+			height: 100vh;
+			max-width: 1400px;
+			background: var(--panel);
+			border: 1px solid rgba(255,255,255,0.06);
+			border-radius: 16px;
+			overflow: hidden;
+			box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+			display: flex;
+			flex-direction: column;
+		}
+		header {
+			padding: 18px 22px 12px;
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 12px;
+			background: linear-gradient(90deg, rgba(196,160,74,0.15), transparent);
+			border-bottom: 1px solid rgba(255,255,255,0.06);
+		}
+		header h1 { margin: 0; font-size: 20px; letter-spacing: 0.4px; }
+		header .subtitle { margin: 0; color: var(--muted); font-size: 13px; }
+		main {
+			display: grid;
+			grid-template-columns: minmax(0,1fr) 320px;
+			gap: 0;
+			flex: 1;
+			min-height: 0;
+			overflow: hidden;
+		}
+		#board-wrapper {
+			padding: 18px;
+			background: #0d121d;
+			height: 100%;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			min-height: 0;
+			overflow: hidden;
+		}
+		canvas {
+			display: block;
+			margin: auto;
+			background: #111827;
+			border-radius: 8px;
+			box-shadow: inset 0 0 0 1px rgba(255,255,255,0.05);
+			width: 100%;
+			height: auto;
+			max-height: 100%;
+			max-width: 100%;
+		}
+		#ui-panel {
+			padding: 18px 18px 24px;
+			border-left: 1px solid rgba(255,255,255,0.06);
+			background: rgba(10,14,24,0.78);
+			height: 100%;
+			overflow-y: auto;
+			min-height: 0;
+		}
+		.section { margin-bottom: 16px; padding: 12px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; }
+		.section h3 { margin: 0 0 8px; font-size: 14px; letter-spacing: 0.6px; color: var(--muted); text-transform: uppercase; }
+		.row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+		.pill { padding: 8px 12px; border-radius: 999px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); font-size: 13px; }
+		button { border: none; border-radius: 8px; padding: 10px 12px; font-size: 14px; cursor: pointer; background: var(--accent); color: #0c0f16; transition: transform 0.1s ease, box-shadow 0.2s ease; }
+		button.secondary { background: rgba(255,255,255,0.12); color: var(--text); }
+		button.danger { background: var(--danger); color: #0c0f16; }
+		button:disabled { opacity: 0.5; cursor: not-allowed; }
+		button:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 10px 22px rgba(0,0,0,0.25); }
+		.status { padding: 10px 12px; border-radius: 10px; background: rgba(90,169,230,0.1); border: 1px solid rgba(90,169,230,0.2); font-size: 14px; }
+		.move-line { display: flex; gap: 8px; padding: 4px 6px; border-radius: 6px; }
+		.move-line:nth-child(odd) { background: rgba(255,255,255,0.06); }
+		.overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(8,10,16,0.82); backdrop-filter: blur(4px); z-index: 20; }
+		.dialog { background: #0f1623; border: 1px solid rgba(255,255,255,0.08); padding: 20px; border-radius: 12px; width: min(520px, 92%); box-shadow: 0 16px 50px rgba(0,0,0,0.35); }
+		.dialog h2 { margin: 0 0 8px; }
+		.dialog p { margin: 4px 0; color: var(--muted); line-height: 1.6; font-size: 14px; }
+		.options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }
+		.option-active { outline: 2px solid var(--accent-2); outline-offset: 1px; }
+		select { width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.14); background: rgba(255,255,255,0.06); color: var(--text); }
+		label { font-size: 13px; color: var(--muted); display: block; margin-top: 6px; }
+		@media (max-width: 980px) { main { grid-template-columns: 1fr; } #ui-panel { border-left: none; border-top: 1px solid rgba(255,255,255,0.06); } }
+		@media (max-width: 640px) { #board-wrapper { padding: 10px; } header { flex-direction: column; align-items: flex-start; } body { padding: 0; } }
+	</style>
+</head>
+<body>
+	<div id="app">
+		<header>
+			<div>
+				<h1>Ludus Latrunculorum</h1>
+				<p class="subtitle">Roman strategy of custodial captures</p>
+			</div>
+			<div class="row">
+				<button class="secondary" id="open-start">Start</button>
+				<button class="secondary" onclick="showRules()">Rules</button>
+				<button class="secondary" onclick="restartGame()">Restart</button>
+			</div>
+		</header>
+		<main>
+			<div id="board-wrapper">
+				<canvas id="board" width="720" height="480"></canvas>
+			</div>
+			<div id="ui-panel">
+				<div class="section">
+					<h3>Turn</h3>
+					<div id="turn" class="pill">White to move</div>
+				</div>
+				<div class="section">
+					<h3>Mode</h3>
+					<div class="row" style="gap:12px;">
+						<button id="mode-human" class="secondary" onclick="setMode('human')">2 Players</button>
+						<button id="mode-ai" onclick="setMode('ai')">Vs AI</button>
+					</div>
+					<label for="difficulty">AI Difficulty</label>
+					<select id="difficulty" onchange="changeDifficulty(event)">
+						<option value="easy">Easy</option>
+						<option value="medium" selected>Medium</option>
+						<option value="hard">Hard</option>
+					</select>
+				</div>
+				<div class="section">
+					<h3>Actions</h3>
+					<div class="row" style="gap:8px;">
+						<button onclick="undoMove()" class="secondary">Undo</button>
+						<button onclick="restartGame()" class="secondary">Restart</button>
+						<button onclick="showHistoryOverlay()" class="secondary">History</button>
+					</div>
+				</div>
+				<div class="section">
+					<h3>Status</h3>
+					<div id="status" class="status">Ready</div>
+				</div>
+			</div>
+		</main>
+	</div>
+
+	<div id="start-overlay" class="overlay">
+		<div class="dialog">
+			<h2>Start Game</h2>
+			<p>Choose how to play, set difficulty, then start.</p>
+			<div class="options">
+				<button id="start-human" onclick="selectStartMode('human')">2 Players</button>
+				<button id="start-ai" onclick="selectStartMode('ai')">Player vs AI</button>
+			</div>
+			<label for="start-difficulty">AI Difficulty</label>
+			<select id="start-difficulty">
+				<option value="easy">Easy</option>
+				<option value="medium" selected>Medium</option>
+				<option value="hard">Hard</option>
+			</select>
+			<div class="row" style="margin-top:12px; justify-content:flex-end;">
+				<button id="btn-start-game" style="min-width:140px;">Start Game</button>
+			</div>
+		</div>
+	</div>
+
+	<div id="rules-overlay" class="overlay" style="display:none;">
+		<div class="dialog">
+			<h2>Rules: Ludus Latrunculorum</h2>
+			<p><strong>Board:</strong> 8 rows x 12 columns. Each player has a Dux (leader) and 15 soldiers.</p>
+			<p><strong>Setup:</strong> Soldiers fill the back two ranks of each player; the Dux sits in the center of the back rank.</p>
+			<p><strong>Movement:</strong> All pieces move any number of empty squares orthogonally (like a rook). No diagonal moves.</p>
+			<p><strong>Capture (Custodial):</strong> An enemy is captured when sandwiched orthogonally between two of your pieces after your move. Multiple enemies may be captured in one move. Edge squares do not capture by themselves; you must have a friendly piece on the opposite side.</p>
+			<p><strong>Victory:</strong> Capture the opposing Dux, or leave the opponent with no legal moves.</p>
+			<div class="row" style="justify-content:flex-end; margin-top:10px;">
+				<button class="secondary" onclick="hideRules()">Close</button>
+			</div>
+		</div>
+	</div>
+
+	<div id="history-overlay" class="overlay" style="display:none;">
+		<div class="dialog">
+			<h2>Move History</h2>
+			<div id="history-list" style="max-height:320px; overflow-y:auto; margin:10px 0;"></div>
+			<div class="row" style="justify-content:flex-end;">
+				<button class="secondary" onclick="hideHistoryOverlay()">Close</button>
+			</div>
+		</div>
+	</div>
+
+	<script>
+		const ROWS = 8;
+		const COLS = 12;
+		const TILE = 60;
+		const COLORS = { WHITE: 'white', BLACK: 'black' };
+
+		const canvas = document.getElementById('board');
+		const ctx = canvas.getContext('2d');
+
+		const state = {
+			board: [],
+			current: COLORS.WHITE,
+			selected: null,
+			moves: [],
+			history: [],
+			log: [],
+			mode: 'human',
+			aiLevel: 'medium',
+			aiColor: COLORS.BLACK,
+			gameOver: false,
+			message: 'Ready',
+		};
+
+		function initialBoard() {
+			const b = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+			for (let c = 0; c < COLS; c++) {
+				b[0][c] = { color: COLORS.BLACK, type: c === Math.floor(COLS / 2) ? 'dux' : 'soldier' };
+				b[1][c] = { color: COLORS.BLACK, type: 'soldier' };
+				b[ROWS - 1][c] = { color: COLORS.WHITE, type: c === Math.floor(COLS / 2) ? 'dux' : 'soldier' };
+				b[ROWS - 2][c] = { color: COLORS.WHITE, type: 'soldier' };
+			}
+			return b;
+		}
+
+		function cloneBoard(board) { return board.map(row => row.map(cell => (cell ? { ...cell } : null))); }
+
+		function reset() {
+			state.board = initialBoard();
+			state.current = COLORS.WHITE;
+			state.selected = null;
+			state.moves = [];
+			state.history = [];
+			state.log = [];
+			state.gameOver = false;
+			state.message = 'Ready';
+			updateUI();
+			draw();
+			maybeAIMove();
+		}
+
+		function setMode(mode) {
+			state.mode = mode;
+			state.aiColor = COLORS.BLACK;
+			document.getElementById('mode-human').classList.toggle('secondary', mode === 'ai');
+			document.getElementById('mode-ai').classList.toggle('secondary', mode === 'human');
+			updateStatus(mode === 'ai' ? 'Player vs AI' : 'Two player mode');
+			maybeAIMove();
+		}
+
+		let startSelectedMode = 'ai';
+
+		function updateStartModeButtons() {
+			document.getElementById('start-human').classList.toggle('option-active', startSelectedMode === 'human');
+			document.getElementById('start-ai').classList.toggle('option-active', startSelectedMode === 'ai');
+		}
+
+		function selectStartMode(mode) {
+			startSelectedMode = mode;
+			updateStartModeButtons();
+		}
+
+		function startGame(mode) {
+			const chosenMode = mode || startSelectedMode;
+			state.aiLevel = document.getElementById('start-difficulty').value;
+			document.getElementById('difficulty').value = state.aiLevel;
+			setMode(chosenMode);
+			reset();
+			document.getElementById('start-overlay').style.display = 'none';
+		}
+
+		function restartGame() { reset(); }
+		function changeDifficulty(e) { state.aiLevel = e.target.value; updateStatus('AI set to ' + state.aiLevel); maybeAIMove(); }
+		function showRules() { document.getElementById('rules-overlay').style.display = 'flex'; }
+		function hideRules() { document.getElementById('rules-overlay').style.display = 'none'; }
+		function showHistoryOverlay() {
+			const list = document.getElementById('history-list');
+			list.innerHTML = '';
+			state.log.forEach((text, idx) => {
+				const div = document.createElement('div');
+				div.className = 'move-line';
+				div.textContent = `${idx + 1}. ${text}`;
+				list.appendChild(div);
+			});
+			document.getElementById('history-overlay').style.display = 'flex';
+		}
+		function hideHistoryOverlay() { document.getElementById('history-overlay').style.display = 'none'; }
+
+		document.getElementById('open-start').addEventListener('click', () => {
+			document.getElementById('start-overlay').style.display = 'flex';
+		});
+		document.getElementById('btn-start-game').addEventListener('click', () => startGame());
+		updateStartModeButtons();
+
+		function coordFromEvent(evt) {
+			const rect = canvas.getBoundingClientRect();
+			const scaleX = canvas.width / rect.width;
+			const scaleY = canvas.height / rect.height;
+			const x = (evt.clientX - rect.left) * scaleX;
+			const y = (evt.clientY - rect.top) * scaleY;
+			return { r: Math.floor(y / TILE), c: Math.floor(x / TILE) };
+		}
+
+		function inBounds(r, c) { return r >= 0 && r < ROWS && c >= 0 && c < COLS; }
+
+		function generateMovesForPiece(r, c) {
+			const piece = state.board[r][c];
+			if (!piece || piece.color !== state.current) return [];
+			const moves = [];
+			const dirs = [ [1,0], [-1,0], [0,1], [0,-1] ];
+			for (const [dr, dc] of dirs) {
+				let nr = r + dr, nc = c + dc;
+				while (inBounds(nr, nc) && !state.board[nr][nc]) {
+					moves.push({ from: { r, c }, to: { r: nr, c: nc } });
+					nr += dr; nc += dc;
+				}
+			}
+			return moves;
+		}
+
+		function generateMovesForBoard(board, r, c) {
+			const piece = board[r][c];
+			if (!piece) return [];
+			const moves = [];
+			const dirs = [ [1,0], [-1,0], [0,1], [0,-1] ];
+			for (const [dr, dc] of dirs) {
+				let nr = r + dr, nc = c + dc;
+				while (inBounds(nr, nc) && !board[nr][nc]) {
+					moves.push({ from: { r, c }, to: { r: nr, c: nc } });
+					nr += dr; nc += dc;
+				}
+			}
+			return moves;
+		}
+
+		function allLegalMoves(color) {
+			const list = [];
+			for (let r = 0; r < ROWS; r++) {
+				for (let c = 0; c < COLS; c++) {
+					const cell = state.board[r][c];
+					if (cell && cell.color === color) list.push(...generateMovesForPiece(r, c));
+				}
+			}
+			return list;
+		}
+
+		function applyMove(board, move) {
+			const nb = cloneBoard(board);
+			const piece = nb[move.from.r][move.from.c];
+			nb[move.from.r][move.from.c] = null;
+			nb[move.to.r][move.to.c] = piece;
+			captureCustodial(nb, move.to.r, move.to.c, piece.color);
+			return nb;
+		}
+
+		function captureCustodial(board, r, c, color) {
+			const dirs = [ [1,0], [-1,0], [0,1], [0,-1] ];
+			for (const [dr, dc] of dirs) {
+				const midR = r + dr, midC = c + dc;
+				const endR = r + dr * 2, endC = c + dc * 2;
+				if (!inBounds(midR, midC) || !inBounds(endR, endC)) continue;
+				const mid = board[midR][midC];
+				const end = board[endR][endC];
+				if (mid && mid.color !== color && end && end.color === color) board[midR][midC] = null;
+			}
+		}
+
+		function handleClick(evt) {
+			if (state.gameOver) return;
+			if (state.mode === 'ai' && state.current === state.aiColor) return;
+			const { r, c } = coordFromEvent(evt);
+			if (!inBounds(r, c)) return;
+			if (state.selected && state.moves.some(m => m.to.r === r && m.to.c === c)) {
+				commitMove(state.selected, { r, c });
+				return;
+			}
+			const cell = state.board[r][c];
+			if (cell && cell.color === state.current) {
+				state.selected = { r, c };
+				state.moves = generateMovesForPiece(r, c);
+			} else {
+				state.selected = null;
+				state.moves = [];
+			}
+			draw();
+		}
+
+		function commitMove(from, to) {
+			const snapshot = { board: cloneBoard(state.board), current: state.current, message: state.message };
+			state.history.push(snapshot);
+			state.board = applyMove(state.board, { from, to });
+			logHistory(from, to, state.current);
+			state.current = state.current === COLORS.WHITE ? COLORS.BLACK : COLORS.WHITE;
+			state.selected = null;
+			state.moves = [];
+			evaluateGame();
+			updateUI();
+			draw();
+			maybeAIMove();
+		}
+
+		function logHistory(from, to, color) {
+			const files = 'abcdefghijklmnopqrstuvwxyz';
+			const rank = (r) => ROWS - r;
+			const text = `${color === COLORS.WHITE ? 'W' : 'B'} ${files[from.c]}${rank(from.r)}-${files[to.c]}${rank(to.r)}`;
+			state.log.push(text);
+		}
+
+		function undoMove() {
+			if (!state.history.length) return;
+			const last = state.history.pop();
+			state.board = last.board;
+			state.current = last.current;
+			state.message = last.message;
+			state.selected = null;
+			state.moves = [];
+			state.gameOver = false;
+			state.log.pop();
+			updateUI();
+			draw();
+		}
+
+		function evaluateGame() {
+			const duxAlive = { white: false, black: false };
+			for (let r = 0; r < ROWS; r++) {
+				for (let c = 0; c < COLS; c++) {
+					const cell = state.board[r][c];
+					if (cell && cell.type === 'dux') duxAlive[cell.color] = true;
+				}
+			}
+			if (!duxAlive.white) { endGame('Black captures the White Dux'); return; }
+			if (!duxAlive.black) { endGame('White captures the Black Dux'); return; }
+			const moves = allLegalMoves(state.current);
+			if (!moves.length) endGame((state.current === COLORS.WHITE ? 'White' : 'Black') + ' has no moves');
+		}
+
+		function endGame(msg) { state.gameOver = true; updateStatus('Game over: ' + msg); }
+
+		function updateStatus(msg) { state.message = msg; document.getElementById('status').textContent = msg; }
+		function updateUI() {
+			document.getElementById('turn').textContent = (state.current === COLORS.WHITE ? 'White' : 'Black') + ' to move';
+			document.getElementById('mode-human').classList.toggle('secondary', state.mode !== 'human');
+			document.getElementById('mode-ai').classList.toggle('secondary', state.mode === 'human');
+			document.getElementById('difficulty').value = state.aiLevel;
+			document.getElementById('status').textContent = state.message;
+		}
+
+		function draw() {
+			ctx.clearRect(0, 0, canvas.width, canvas.height);
+			drawGrid();
+			if (state.selected) drawHighlights();
+			drawPieces();
+		}
+
+		function drawGrid() {
+			for (let r = 0; r < ROWS; r++) {
+				for (let c = 0; c < COLS; c++) {
+					const light = (r + c) % 2 === 0;
+					ctx.fillStyle = light ? 'var(--grid-light)' : 'var(--grid-dark)';
+					ctx.fillRect(c * TILE, r * TILE, TILE, TILE);
+					ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+					ctx.lineWidth = 1;
+					ctx.strokeRect(c * TILE + 0.5, r * TILE + 0.5, TILE - 1, TILE - 1);
+				}
+			}
+		}
+
+		function drawHighlights() {
+			ctx.fillStyle = 'rgba(90, 169, 230, 0.35)';
+			ctx.fillRect(state.selected.c * TILE, state.selected.r * TILE, TILE, TILE);
+			ctx.fillStyle = 'rgba(196, 160, 74, 0.32)';
+			for (const m of state.moves) ctx.fillRect(m.to.c * TILE, m.to.r * TILE, TILE, TILE);
+		}
+
+		function drawPieces() {
+			for (let r = 0; r < ROWS; r++) {
+				for (let c = 0; c < COLS; c++) {
+					const piece = state.board[r][c];
+					if (!piece) continue;
+					const x = c * TILE + TILE / 2;
+					const y = r * TILE + TILE / 2;
+					ctx.fillStyle = piece.color === COLORS.WHITE ? '#f7f7f7' : '#1e2b3f';
+					ctx.beginPath();
+					ctx.arc(x, y, TILE * 0.36, 0, Math.PI * 2);
+					ctx.fill();
+					ctx.lineWidth = 2;
+					ctx.strokeStyle = piece.color === COLORS.WHITE ? '#c4a04a' : '#5aa9e6';
+					ctx.stroke();
+					ctx.fillStyle = piece.color === COLORS.WHITE ? '#1e2b3f' : '#f5f7fb';
+					ctx.font = 'bold 18px "Segoe UI", sans-serif';
+					ctx.textAlign = 'center';
+					ctx.textBaseline = 'middle';
+					ctx.fillText(piece.type === 'dux' ? 'D' : 'S', x, y);
+				}
+			}
+		}
+
+		function maybeAIMove() {
+			if (state.gameOver) return;
+			if (state.mode !== 'ai') return;
+			if (state.current !== state.aiColor) return;
+			setTimeout(() => {
+				const move = chooseAIMove();
+				if (move) commitMove(move.from, move.to); else endGame('AI has no moves');
+			}, 160);
+		}
+
+		function evaluateBoard(board) {
+			let score = 0;
+			for (let r = 0; r < ROWS; r++) {
+				for (let c = 0; c < COLS; c++) {
+					const cell = board[r][c];
+					if (!cell) continue;
+					const val = cell.type === 'dux' ? 6 : 1;
+					score += cell.color === state.aiColor ? val : -val;
+				}
+			}
+			return score;
+		}
+
+		function chooseAIMove() {
+			const depth = state.aiLevel === 'hard' ? 2 : state.aiLevel === 'medium' ? 1 : 0;
+			const color = state.aiColor;
+			const moves = allLegalMoves(color);
+			if (!moves.length) return null;
+			let best = moves[0];
+			let bestScore = -Infinity;
+			for (const mv of moves) {
+				const nb = applyMove(state.board, mv);
+				const score = minimax(nb, depth, false, color, -Infinity, Infinity);
+				if (score > bestScore) { bestScore = score; best = mv; }
+			}
+			return best;
+		}
+
+		function minimax(board, depth, maximizing, aiColor, alpha, beta) {
+			const currentColor = maximizing ? aiColor : (aiColor === COLORS.WHITE ? COLORS.BLACK : COLORS.WHITE);
+			const duxAlive = { white: false, black: false };
+			for (let r = 0; r < ROWS; r++) {
+				for (let c = 0; c < COLS; c++) {
+					const cell = board[r][c];
+					if (cell && cell.type === 'dux') duxAlive[cell.color] = true;
+				}
+			}
+			if (!duxAlive.white) return aiColor === COLORS.BLACK ? 999 : -999;
+			if (!duxAlive.black) return aiColor === COLORS.WHITE ? 999 : -999;
+			if (depth === 0) return evaluateBoard(board);
+			const moves = [];
+			for (let r = 0; r < ROWS; r++) {
+				for (let c = 0; c < COLS; c++) {
+					const cell = board[r][c];
+					if (cell && cell.color === currentColor) moves.push(...generateMovesForBoard(board, r, c));
+				}
+			}
+			if (!moves.length) return maximizing ? -999 : 999;
+			if (maximizing) {
+				let maxEval = -Infinity;
+				for (const mv of moves) {
+					const nb = applyMove(board, mv);
+					const evalScore = minimax(nb, depth - 1, false, aiColor, alpha, beta);
+					maxEval = Math.max(maxEval, evalScore);
+					alpha = Math.max(alpha, evalScore);
+					if (beta <= alpha) break;
+				}
+				return maxEval;
+			} else {
+				let minEval = Infinity;
+				for (const mv of moves) {
+					const nb = applyMove(board, mv);
+					const evalScore = minimax(nb, depth - 1, true, aiColor, alpha, beta);
+					minEval = Math.min(minEval, evalScore);
+					beta = Math.min(beta, evalScore);
+					if (beta <= alpha) break;
+				}
+				return minEval;
+			}
+		}
+
+		canvas.addEventListener('click', handleClick);
+		reset();
+	</script>
+</body>
+</html>
