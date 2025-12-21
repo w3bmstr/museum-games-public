@@ -5,33 +5,33 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Chaturanga – Standalone</title>
 <style>
-	html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #0f0f12; color: #eee; font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif; font-size: 16px; }
+	html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #0f0f12; color: #eee; font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif; font-size: clamp(15px, 1.2vw + 12px, 18px); }
 	#game-container { position: relative; width: 100vw; height: 100vh; background: #0f0f12; overflow: hidden; }
 	canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 	.layer-board { z-index: 0; pointer-events: none; }
 	.layer-pieces { z-index: 1; pointer-events: none; }
 	.layer-ui { z-index: 2; }
 	#top-bar { position: absolute; top: 0; left: 0; right: 0; height: 56px; padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; gap: 10px; background: linear-gradient(90deg, rgba(124,77,255,0.24), rgba(0,0,0,0.55)); border-bottom: 1px solid rgba(255,255,255,0.08); z-index: 6; box-shadow: 0 10px 30px rgba(0,0,0,0.35); }
-	#top-bar .title { font-size: 20px; font-weight: 700; letter-spacing: 0.4px; color: #ffd166; }
-	#top-bar .subtitle { font-size: 13px; color: #a9b6d2; margin-top: 2px; }
+	#top-bar .title { font-size: clamp(19px, 2vw + 14px, 22px); font-weight: 700; letter-spacing: 0.4px; color: #ffd166; }
+	#top-bar .subtitle { font-size: clamp(13px, 1.2vw + 9px, 15px); color: #a9b6d2; margin-top: 2px; }
 	#top-bar .title-wrap { display: flex; flex-direction: column; }
 	#top-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-	.pill-btn { padding: 8px 11px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.14); background: rgba(255,255,255,0.12); color: #f5f5f5; cursor: pointer; font-size: 14px; }
+	.pill-btn { padding: 8px 11px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.14); background: rgba(255,255,255,0.12); color: #f5f5f5; cursor: pointer; font-size: clamp(14px, 1.1vw + 10px, 16px); }
 	.pill-btn.primary { background: linear-gradient(135deg, #7c4dff, #512da8); color: #fff; border-color: rgba(255,255,255,0.2); }
 	#start-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.7); z-index: 10; }
 	#start-card { background: #1d1d1f; border: 1px solid #333; border-radius: 12px; padding: 20px 22px; color: #f5f5f5; min-width: 320px; box-shadow: 0 12px 30px rgba(0,0,0,0.35); }
-	#start-card h2 { margin: 0 0 12px 0; font-size: 22px; }
-	#start-card p { margin: 0 0 12px 0; font-size: 15px; color: #ccc; }
+	#start-card h2 { margin: 0 0 12px 0; font-size: clamp(22px, 2.4vw + 14px, 26px); }
+	#start-card p { margin: 0 0 12px 0; font-size: clamp(15px, 1.2vw + 11px, 18px); color: #ccc; }
 	#start-card .btn-row { display: flex; gap: 10px; margin-top: 10px; }
-	#start-card button { flex: 1; padding: 11px 13px; border: none; border-radius: 10px; background: linear-gradient(135deg, #7c4dff, #512da8); color: #fff; font-weight: 700; cursor: pointer; font-size: 15px; }
+	#start-card button { flex: 1; padding: 11px 13px; border: none; border-radius: 10px; background: linear-gradient(135deg, #7c4dff, #512da8); color: #fff; font-weight: 700; cursor: pointer; font-size: clamp(15px, 1.3vw + 11px, 18px); }
 	#start-card button.secondary { background: #444; }
 	#start-card button.active { outline: 2px solid #fff; }
 	#hud { position: absolute; top: 64px; left: 10px; z-index: 5; display: flex; flex-direction: column; gap: 10px; }
-	.panel { background: rgba(0,0,0,0.58); border: 1px solid #333; border-radius: 12px; padding: 12px 14px; min-width: 240px; color: #eee; box-shadow: 0 8px 20px rgba(0,0,0,0.3); font-size: 15px; }
-	.panel h4 { margin: 0 0 6px 0; font-size: 15px; letter-spacing: 0.4px; color: #9cf; }
-	.panel p { margin: 4px 0; font-size: 15px; }
+	.panel { background: rgba(0,0,0,0.58); border: 1px solid #333; border-radius: 12px; padding: 12px 14px; min-width: 240px; color: #eee; box-shadow: 0 8px 20px rgba(0,0,0,0.3); font-size: clamp(15px, 1.15vw + 11px, 17px); }
+	.panel h4 { margin: 0 0 6px 0; font-size: clamp(15px, 1.1vw + 11px, 17px); letter-spacing: 0.4px; color: #9cf; }
+	.panel p { margin: 4px 0; font-size: clamp(15px, 1.15vw + 11px, 17px); }
 	#controls { display: flex; gap: 8px; flex-wrap: wrap; }
-	#controls button { padding: 9px 11px; border: none; border-radius: 10px; background: #2d2d33; color: #eee; cursor: pointer; font-size: 14px; }
+	#controls button { padding: 9px 11px; border: none; border-radius: 10px; background: #2d2d33; color: #eee; cursor: pointer; font-size: clamp(14px, 1.05vw + 10px, 16px); }
 	#controls button.primary { background: linear-gradient(135deg, #7c4dff, #512da8); color: #fff; }
 	.history-panel { position: relative; max-height: 240px; overflow-y: auto; font-family: monospace; font-size: 12px; }
 	.history-panel .move-line { margin: 2px 0; }
