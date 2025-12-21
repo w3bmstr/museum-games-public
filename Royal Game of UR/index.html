@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Royal Game of Ur</title>
+	<style>
+		html, body { margin:0; padding:0; width:100%; height:100%; background:#0b0d12; color:#e8ebf2; font-family:"Segoe UI", system-ui, sans-serif; overflow:hidden; }
+		#game-container { position:relative; width:100vw; height:100vh; overflow:hidden; background: radial-gradient(circle at 20% 20%, rgba(88,198,255,0.08), transparent 45%), radial-gradient(circle at 80% 70%, rgba(255,160,80,0.08), transparent 45%), #0b0d12; }
+		canvas { position:absolute; inset:0; width:100%; height:100%; display:block; }
+		.layer-board { z-index:0; pointer-events:none; }
+		.layer-pieces { z-index:1; pointer-events:none; }
+		.layer-ui { z-index:2; }
+		#hud { position:absolute; top:10px; left:10px; z-index:5; display:flex; flex-direction:column; gap:8px; }
+		.panel { background:rgba(0,0,0,0.58); border:1px solid #1f2430; border-radius:10px; padding:10px 12px; min-width:240px; box-shadow:0 10px 28px rgba(0,0,0,0.35); }
+		.panel h4 { margin:0 0 6px 0; font-size:13px; letter-spacing:0.5px; color:#ffc857; }
+		.panel p { margin:4px 0; font-size:13px; }
+		#controls { display:flex; gap:8px; flex-wrap:wrap; }
+		#controls button { padding:8px 10px; border:none; border-radius:8px; background:#252a38; color:#e8e8ec; cursor:pointer; font-size:13px; }
+		#controls button.primary { background:linear-gradient(135deg, #58c6ff, #2f81ff); color:#fff; }
+		#controls button:disabled { opacity:0.55; cursor:not-allowed; }
+		.history-panel { position:relative; max-height:260px; overflow-y:auto; font-family:monospace; font-size:12px; }
+		.history-panel .move-line { margin:2px 0; }
+		.history-close { position:absolute; top:6px; right:6px; padding:4px 8px; border:none; border-radius:6px; background:#252a38; color:#e8e8ec; cursor:pointer; font-size:11px; }
+		#btn-history { display:none; }
+		@media (max-width:720px) {
+			#hud { position:fixed; top:auto; bottom:0; left:0; right:0; flex-direction:row; gap:6px; padding:6px; background:linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.45) 40%); backdrop-filter:blur(8px); }
+			#hud .panel { min-width:0; flex:1; }
+			#history { display:none; position:fixed; right:8px; bottom:78px; width:82vw; max-width:380px; max-height:55vh; z-index:12; background:rgba(0,0,0,0.85); border-radius:10px; }
+			#history.show { display:block; }
+			#btn-history { display:inline-block; }
+		}
+		#start-overlay { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.72); z-index:10; }
+		#start-card { background:#161820; border:1px solid #262c3a; border-radius:12px; padding:18px 22px; color:#f5f5f5; min-width:280px; box-shadow:0 12px 30px rgba(0,0,0,0.35); }
+		#start-card h2 { margin:0 0 10px 0; font-size:20px; }
+		#start-card p { margin:0 0 12px 0; font-size:14px; color:#cfd3dd; }
+		#start-card .btn-row { display:flex; gap:10px; margin-top:10px; }
+		#start-card button { flex:1; padding:10px 12px; border:none; border-radius:8px; background:linear-gradient(135deg, #58c6ff, #2f81ff); color:#fff; font-weight:700; cursor:pointer; }
+		#start-card button.secondary { background:#3a3f4f; }
+		#start-card button.active { outline:2px solid #fff; }
+		#rules-overlay { position:absolute; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,0.7); z-index:11; }
+		#rules-overlay.show { display:flex; }
+		#rules-card { background:#161820; border:1px solid #262c3a; border-radius:12px; padding:18px 22px; color:#f5f5f5; max-width:760px; width:90%; box-shadow:0 12px 30px rgba(0,0,0,0.35); line-height:1.45; }
+		#rules-card h3 { margin:0 0 8px 0; font-size:18px; }
+		#rules-card ul { margin:8px 0 0 18px; padding:0; }
+		#rules-card li { margin:4px 0; }
+		#close-rules { margin-top:12px; padding:8px 12px; border:none; border-radius:8px; background:#3a3f4f; color:#fff; cursor:pointer; }
+	</style>
+</head>
+<body>
+<div id="game-container">
+	<div id="hud">
+		<div class="panel">
+			<h4>Status</h4>
+			<p id="turn-text">Turn: --</p>
+			<p id="roll-text">Roll: --</p>
+			<p id="ai-text">AI: --</p>
+			<p id="msg-text">Ready</p>
+			<p id="cap-text">Borne Off W:0 B:0</p>
+			<p id="lastmove-text">Last: --</p>
+		</div>
+		<div id="controls" class="panel">
+			<button id="btn-start" class="primary">New Game</button>
+			<button id="btn-roll">Roll</button>
+			<button id="btn-undo">Undo</button>
+			<button id="btn-history">History</button>
+			<button id="btn-rules">Rules</button>
+		</div>
+		<div id="history" class="panel history-panel">
+			<h4>Moves</h4>
+			<button id="btn-history-close" class="history-close">Close</button>
+			<div id="move-list"></div>
+		</div>
+	</div>
+
+	<div id="start-overlay">
+		<div id="start-card">
+			<h2>Royal Game of Ur</h2>
+			<p>Race 7 stones along a 20-tile track. Roll 4 binary dice (0-4 steps). Rosettes grant an extra turn; captures on non-rosettes.</p>
+			<div class="btn-row">
+				<button id="btn-1p">1 Player (vs AI)</button>
+				<button id="btn-2p" class="secondary">2 Players</button>
+			</div>
+			<p style="margin-top:12px; margin-bottom:6px;">AI Difficulty</p>
+			<div class="btn-row">
+				<button id="btn-easy" class="secondary">Easy</button>
+				<button id="btn-med" class="active">Medium</button>
+				<button id="btn-hard" class="secondary">Hard</button>
+			</div>
+			<p style="margin-top:12px; margin-bottom:6px;">Start</p>
+			<div class="btn-row" style="margin-top:8px;">
+				<button id="btn-start-overlay" class="primary">Start Game</button>
+			</div>
+		</div>
+	</div>
+
+	<div id="rules-overlay">
+		<div id="rules-card">
+			<h3>Rules</h3>
+			<ul>
+				<li>Each player has 7 stones off-board. First to bear off all 7 wins.</li>
+				<li>On your turn, roll 4 binary dice (each 0/1). Sum is your move (0-4). If 0 and no move, pass.</li>
+				<li>You may enter a stone from off-board onto the first tile if the roll fits.</li>
+				<li>Move exactly the rolled value. You must have an empty target or an enemy on a non-rosette to capture it. You cannot land on your own stone.</li>
+				<li>Rosettes (★) are safe from capture and grant an extra turn when landed on.</li>
+				<li>You must roll exact to bear off beyond the final tile.</li>
+				<li>Controls: click a stone then target; Roll or press Space/Enter to roll; U undo; H rules.</li>
+			</ul>
+			<button id="close-rules">Close</button>
+		</div>
+	</div>
+</div>
+
+<script>
+(function() {
+	const LIGHT = 1; // White
+	const DARK = 2;  // Black
+	const dpr = window.devicePixelRatio || 1;
+	const TRACK_LEN = 20;
+	const ROSETTES = new Set([4, 8, 14]);
+	const START_POOL = -1;
+	const BEAR_OFF = TRACK_LEN;
+
+	const container = document.getElementById("game-container");
+	const startOverlay = document.getElementById("start-overlay");
+	const btn1p = document.getElementById("btn-1p");
+	const btn2p = document.getElementById("btn-2p");
+	const btnEasy = document.getElementById("btn-easy");
+	const btnMed = document.getElementById("btn-med");
+	const btnHard = document.getElementById("btn-hard");
+	const btnStartOverlay = document.getElementById("btn-start-overlay");
+	const btnRules = document.getElementById("btn-rules");
+	const rulesOverlay = document.getElementById("rules-overlay");
+	const closeRules = document.getElementById("close-rules");
+	const hudBtnStart = document.getElementById("btn-start");
+	const hudBtnRoll = document.getElementById("btn-roll");
+	const hudBtnUndo = document.getElementById("btn-undo");
+	const hudBtnHistory = document.getElementById("btn-history");
+	const btnHistoryClose = document.getElementById("btn-history-close");
+	const historyPanel = document.getElementById("history");
+	const turnText = document.getElementById("turn-text");
+	const aiText = document.getElementById("ai-text");
+	const msgText = document.getElementById("msg-text");
+	const capText = document.getElementById("cap-text");
+	const lastMoveText = document.getElementById("lastmove-text");
+	const rollText = document.getElementById("roll-text");
+	const moveList = document.getElementById("move-list");
+
+	const boardLayer = document.createElement("canvas");
+	const piecesLayer = document.createElement("canvas");
+	const uiLayer = document.createElement("canvas");
+	boardLayer.className = "layer-board";
+	piecesLayer.className = "layer-pieces";
+	uiLayer.className = "layer-ui";
+	container.appendChild(boardLayer);
+	container.appendChild(piecesLayer);
+	container.appendChild(uiLayer);
+
+	const layout = { width:0, height:0, cell:0, offsetX:0, offsetY:0, row2Y:0, coords:[] };
+
+	const state = {
+		positions: { [LIGHT]: Array(7).fill(START_POOL), [DARK]: Array(7).fill(START_POOL) },
+		turn: LIGHT,
+		roll: null,
+		moveHistory: [],
+		lastMove: null,
+		borne: { [LIGHT]:0, [DARK]:0 },
+		gameOver: false,
+		winner: null,
+		message: "",
+		selected: { color:null, index:null },
+		legalMoves: [],
+		aiEnabled: true,
+		aiColor: DARK,
+		aiLevel: "medium",
+		thinking: false,
+		menuActive: true
+	};
+
+	let selectedMode = "1p";
+	let selectedDiff = "medium";
+
+	function resize() {
+		layout.width = window.innerWidth;
+		layout.height = window.innerHeight;
+		[boardLayer, piecesLayer, uiLayer].forEach(c => {
+			c.width = layout.width * dpr;
+			c.height = layout.height * dpr;
+			c.style.width = `${layout.width}px`;
+			c.style.height = `${layout.height}px`;
+			const ctx = c.getContext("2d");
+			ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+		});
+		const cols = 10;
+		const rows = 2;
+		const size = Math.min(layout.width / cols, layout.height / (rows + 0.5)) * 0.9;
+		layout.cell = size;
+		layout.offsetX = (layout.width - size * cols) / 2;
+		layout.offsetY = (layout.height - size * rows) / 2;
+		layout.row2Y = layout.offsetY + size;
+		layout.coords = buildCoords();
+		render();
+	}
+
+	function buildCoords() {
+		const coords = [];
+		// first 10 along top row, next 10 along bottom row
+		for (let i=0; i<20; i++) {
+			const row = i < 10 ? 0 : 1;
+			const col = i < 10 ? i : i-10;
+			coords.push({ x: layout.offsetX + col*layout.cell, y: layout.offsetY + row*layout.cell });
+		}
+		return coords;
+	}
+
+	function resetGame() {
+		state.positions = { [LIGHT]: Array(7).fill(START_POOL), [DARK]: Array(7).fill(START_POOL) };
+		state.turn = LIGHT;
+		state.roll = null;
+		state.moveHistory = [];
+		state.lastMove = null;
+		state.borne = { [LIGHT]:0, [DARK]:0 };
+		state.gameOver = false;
+		state.winner = null;
+		state.message = "";
+		state.selected = { color:null, index:null };
+		state.legalMoves = [];
+		updateHud();
+	}
+
+	function drawBoard() {
+		const ctx = boardLayer.getContext("2d");
+		ctx.clearRect(0,0,layout.width, layout.height);
+		ctx.fillStyle = "#0b0d12";
+		ctx.fillRect(0,0,layout.width, layout.height);
+		ctx.font = `${layout.cell*0.35}px sans-serif`;
+		ctx.textAlign = "center";
+		ctx.textBaseline = "middle";
+		for (let i=0; i<TRACK_LEN; i++) {
+			const {x,y} = layout.coords[i];
+			ctx.fillStyle = i<10 ? "#2c3042" : "#40465c";
+			ctx.fillRect(x, y, layout.cell, layout.cell);
+			ctx.strokeStyle = "#1f2430";
+			ctx.lineWidth = 2;
+			ctx.strokeRect(x+1.5, y+1.5, layout.cell-3, layout.cell-3);
+			if (ROSETTES.has(i)) {
+				ctx.fillStyle = "#ffd166";
+				ctx.fillText("★", x + layout.cell/2, y + layout.cell/2);
+			}
+		}
+	}
+
+	function drawPieces() {
+		const ctx = piecesLayer.getContext("2d");
+		ctx.clearRect(0,0,layout.width, layout.height);
+		const drawSet = (color, arr) => {
+			arr.forEach((pos, idx) => {
+				if (pos === START_POOL || pos === BEAR_OFF) return;
+				const {x,y} = layout.coords[pos];
+				const cx = x + layout.cell/2;
+				const cy = y + layout.cell/2;
+				ctx.fillStyle = color===LIGHT ? "#f5f5f7" : "#0f121b";
+				ctx.strokeStyle = color===LIGHT ? "#1d1f2a" : "#6ab0ff";
+				ctx.lineWidth = 2.5;
+				ctx.beginPath();
+				ctx.arc(cx, cy, layout.cell*0.32, 0, Math.PI*2);
+				ctx.fill();
+				ctx.stroke();
+				ctx.fillStyle = color===LIGHT ? "#111" : "#f5f5f7";
+				ctx.font = `${layout.cell*0.28}px sans-serif`;
+				ctx.fillText((idx+1).toString(), cx, cy+layout.cell*0.02);
+			});
+		};
+		drawSet(LIGHT, state.positions[LIGHT]);
+		drawSet(DARK, state.positions[DARK]);
+
+		const ui = uiLayer.getContext("2d");
+		ui.clearRect(0,0,layout.width, layout.height);
+		if (state.selected.index !== null && state.selected.color === state.turn) {
+			const pos = state.positions[state.selected.color][state.selected.index];
+			if (pos >= 0 && pos < TRACK_LEN) highlightCell(ui, pos, "#58c6ff", 3);
+			state.legalMoves.forEach(m => highlightCell(ui, m.to, "#ffd166", 2));
+		}
+		if (state.lastMove && state.lastMove.to >= 0 && state.lastMove.to < TRACK_LEN) {
+			highlightCell(ui, state.lastMove.to, "#7ed0ff", 2);
+		}
+	}
+
+	function highlightCell(ctx, idx, color, w) {
+		const {x,y} = layout.coords[idx];
+		ctx.save();
+		ctx.strokeStyle = color;
+		ctx.lineWidth = w;
+		ctx.strokeRect(x+2, y+2, layout.cell-4, layout.cell-4);
+		ctx.restore();
+	}
+
+	function rollDice() {
+		if (state.menuActive) { state.message = "Start a game first"; updateHud(); return; }
+		if (state.gameOver) { state.message = "Game over - new game"; updateHud(); return; }
+		if (state.roll !== null) { state.message = "Finish your move"; updateHud(); return; }
+		const bits = [0,0,0,0].map(() => Math.random() < 0.5 ? 1 : 0);
+		const sum = bits.reduce((a,b)=>a+b,0);
+		state.roll = sum;
+		state.message = `Rolled ${sum}`;
+		computeLegal();
+		if (state.legalMoves.length === 0) {
+			state.message = "No moves";
+			state.roll = null;
+			state.turn = oppColor(state.turn);
+			updateHud();
+			render();
+			if (state.aiEnabled && state.turn === state.aiColor && !state.menuActive) maybeRunAI();
+			return;
+		}
+		updateHud();
+		render();
+		if (state.aiEnabled && state.turn === state.aiColor && !state.menuActive) maybeRunAI();
+	}
+
+	function computeLegal() {
+		const roll = state.roll;
+		state.legalMoves = [];
+		if (roll === null || roll === 0) return;
+		const posArr = state.positions[state.turn];
+		for (let i=0; i<posArr.length; i++) {
+			const from = posArr[i];
+			const to = from + roll;
+			if (from === BEAR_OFF) continue;
+			if (to > BEAR_OFF) continue;
+			if (to === BEAR_OFF) {
+				state.legalMoves.push({ idx:i, from, to });
+				continue;
+			}
+			if (occupiedBy(state.turn, to)) continue;
+			const opp = oppColor(state.turn);
+			const oppIdx = indexAt(opp, to);
+			if (oppIdx !== -1 && ROSETTES.has(to)) continue; // cannot capture on rosette
+			state.legalMoves.push({ idx:i, from, to, capture: oppIdx !== -1 ? { color:opp, idx:oppIdx } : null });
+		}
+	}
+
+	function occupiedBy(color, pos) { return indexAt(color, pos) !== -1; }
+	function indexAt(color, pos) { return state.positions[color].findIndex(p => p === pos); }
+	function oppColor(c) { return c===LIGHT?DARK:LIGHT; }
+
+	function selectPiece(idx) {
+		if (state.menuActive || state.gameOver) return;
+		if (state.roll === null) { state.message = "Roll first"; updateHud(); return; }
+		const pos = state.positions[state.turn][idx];
+		const legal = state.legalMoves.filter(m => m.idx === idx);
+		if (!legal.length) { state.message = "No move for that piece"; updateHud(); return; }
+		state.selected = { color: state.turn, index: idx };
+		state.legalMoves = legal;
+		updateHud();
+		render();
+	}
+
+	function tryMove(toIdx) {
+		if (state.menuActive || state.gameOver || state.selected.index === null) return;
+		const mv = state.legalMoves.find(m => m.to === toIdx);
+		if (!mv) return;
+		executeMove(mv);
+	}
+
+	function executeMove(mv) {
+		const color = state.turn;
+		const opp = oppColor(color);
+		const positions = state.positions[color];
+		const move = { turn: color, roll: state.roll, idx: mv.idx, from: mv.from, to: mv.to, capture: null, extra: false };
+
+		// capture handling
+		if (mv.capture) {
+			const { color: c, idx } = mv.capture;
+			const backPos = START_POOL;
+			state.positions[c][idx] = backPos;
+			move.capture = { color: c, idx, prev: mv.to };
+		}
+
+		if (mv.to === BEAR_OFF) {
+			positions[mv.idx] = BEAR_OFF;
+			state.borne[color] += 1;
+		} else {
+			positions[mv.idx] = mv.to;
+		}
+
+		const landedRosette = mv.to !== BEAR_OFF && ROSETTES.has(mv.to);
+		move.extra = landedRosette;
+
+		state.moveHistory.push(move);
+		state.lastMove = move;
+		state.selected = { color:null, index:null };
+		state.roll = null;
+
+		if (state.borne[color] === 7) {
+			state.gameOver = true;
+			state.winner = color === LIGHT ? "White" : "Black";
+			state.message = "Finished!";
+			updateHud();
+			render();
+			return;
+		}
+
+		if (!landedRosette) state.turn = opp;
+		state.message = landedRosette ? "Rosette! Take another turn" : "";
+		updateHud();
+		render();
+		if (state.aiEnabled && state.turn === state.aiColor && !state.gameOver) maybeRunAI();
+	}
+
+	function undo() {
+		const mv = state.moveHistory.pop();
+		if (!mv) return;
+		state.turn = mv.turn;
+		state.roll = null;
+		state.selected = { color:null, index:null };
+		const positions = state.positions[mv.turn];
+		positions[mv.idx] = mv.from;
+		if (mv.from === BEAR_OFF) state.borne[mv.turn] -= 1;
+		if (mv.capture) {
+			state.positions[mv.capture.color][mv.capture.idx] = mv.capture.prev;
+		}
+		if (mv.to === BEAR_OFF) state.borne[mv.turn] -= 1;
+		state.lastMove = state.moveHistory[state.moveHistory.length-1] || null;
+		state.gameOver = false; state.winner = null; state.message = "Undone";
+		updateHud(); render();
+	}
+
+	function maybeRunAI() {
+		if (!state.aiEnabled || state.menuActive || state.gameOver || state.turn !== state.aiColor || state.thinking) return;
+		if (state.roll === null) {
+			state.thinking = true;
+			setTimeout(() => {
+				state.thinking = false;
+				rollDice();
+				if (!state.gameOver && state.aiEnabled && state.turn === state.aiColor && !state.menuActive) maybeRunAI();
+			}, 160);
+			return;
+		}
+		state.thinking = true;
+		setTimeout(() => {
+			computeLegal();
+			if (!state.legalMoves.length) { state.turn = oppColor(state.turn); state.roll = null; state.message = "No moves"; state.thinking=false; updateHud(); render(); maybeRunAI(); return; }
+			const mv = aiChooseMove();
+			if (mv) executeMove(mv);
+			state.thinking = false;
+			updateHud();
+		}, state.aiLevel === "hard" ? 120 : state.aiLevel === "medium" ? 170 : 220);
+	}
+
+	function aiChooseMove() {
+		const moves = state.legalMoves;
+		if (!moves.length) return null;
+		let best = -Infinity; let bestList=[];
+		for (const mv of moves) {
+			const score = scoreMove(mv);
+			if (score > best + 1e-6) { best = score; bestList=[mv]; }
+			else if (Math.abs(score - best) < 1e-6) bestList.push(mv);
+		}
+		return bestList[Math.floor(Math.random()*bestList.length)];
+	}
+
+	function scoreMove(mv) {
+		let s = 0;
+		// prefer bearing off
+		if (mv.to === BEAR_OFF) s += 50;
+		// advancement
+		s += mv.to * 0.5;
+		// rosette bonus
+		if (mv.to !== BEAR_OFF && ROSETTES.has(mv.to)) s += 15;
+		// capture bonus (bigger on hard)
+		if (mv.capture) s += state.aiLevel === "hard" ? 25 : 18;
+		// risk: landing in shared track - small penalty if not rosette
+		if (mv.to >= 5 && mv.to <= 14 && !ROSETTES.has(mv.to)) s -= 3;
+		// randomness
+		s += Math.random() * 1.5;
+		return s;
+	}
+
+	function renderHistory() {
+		const name = c => c===LIGHT?"W":"B";
+		moveList.innerHTML = state.moveHistory.map((mv,i) => {
+			const cap = mv.capture ? " x" : "";
+			const ros = mv.extra ? "*" : "";
+			const fromStr = mv.from===START_POOL ? "off" : mv.from===BEAR_OFF?"borne":mv.from;
+			const toStr = mv.to===BEAR_OFF ? "off" : mv.to;
+			return `<div class="move-line">${i+1}. ${name(mv.turn)} r${mv.roll}: ${fromStr}->${toStr}${cap}${ros}</div>`;
+		}).join("");
+	}
+
+	function toggleHistory(force) { const show = force!==undefined ? force : !historyPanel.classList.contains("show"); historyPanel.classList.toggle("show", show); }
+	function toggleRules(force) { const show = force!==undefined ? force : !rulesOverlay.classList.contains("show"); rulesOverlay.classList.toggle("show", show); }
+	function showStartOverlay() { startOverlay.style.display = "flex"; state.menuActive = true; setBoardInput(false); }
+	function setBoardInput(enabled) { uiLayer.style.pointerEvents = enabled ? "auto" : "none"; }
+
+	function handlePointer(e) {
+		if (state.menuActive) return;
+		const rect = uiLayer.getBoundingClientRect();
+		const mx = e.clientX - rect.left;
+		const my = e.clientY - rect.top;
+		// detect piece click
+		const hitPiece = hitTestPiece(mx, my);
+		if (hitPiece && hitPiece.color === state.turn) { selectPiece(hitPiece.index); return; }
+		const idx = hitTestCell(mx, my);
+		if (idx !== null) {
+			if (state.selected.index !== null) { tryMove(idx); }
+			else {
+				// if not selected, try any legal move that lands here
+				const mv = state.legalMoves.find(m => m.to === idx);
+				if (mv) { state.selected = { color: state.turn, index: mv.idx }; executeMove(mv); }
+			}
+		}
+	}
+
+	function hitTestCell(mx, my) {
+		for (let i=0; i<TRACK_LEN; i++) {
+			const {x,y} = layout.coords[i];
+			if (mx >= x && mx <= x+layout.cell && my >= y && my <= y+layout.cell) return i;
+		}
+		return null;
+	}
+
+	function hitTestPiece(mx, my) {
+		const radius = layout.cell*0.32;
+		for (const color of [LIGHT, DARK]) {
+			const arr = state.positions[color];
+			for (let i=0; i<arr.length; i++) {
+				const pos = arr[i];
+				if (pos < 0 || pos >= TRACK_LEN) continue;
+				const {x,y} = layout.coords[pos];
+				const cx = x + layout.cell/2;
+				const cy = y + layout.cell/2;
+				const dx = mx - cx, dy = my - cy;
+				if (dx*dx + dy*dy <= radius*radius) return { color, index: i };
+			}
+		}
+		return null;
+	}
+
+	function handleKey(e) {
+		const key = e.key.toLowerCase();
+		if (rulesOverlay.classList.contains("show")) { if (["h","escape","enter"," "].includes(key)) toggleRules(false); return; }
+		if (state.menuActive) {
+			if (key === "1") { selectedMode="1p"; applyModeUI(); }
+			else if (key === "2") { selectedMode="2p"; applyModeUI(); }
+			else if (key === "arrowup" || key === "w") { cycleDiff(-1); }
+			else if (key === "arrowdown" || key === "s") { cycleDiff(1); }
+			else if (key === "enter" || key === " ") { startSelected(); }
+			return;
+		}
+		if (key === " " || key === "enter") { rollDice(); }
+		else if (key === "u") { undo(); }
+		else if (key === "h") { toggleRules(); }
+		updateHud(); render();
+		maybeRunAI();
+	}
+
+	function updateHud() {
+		turnText.textContent = `Turn: ${state.turn===LIGHT?"WHITE":"BLACK"}`;
+		rollText.textContent = `Roll: ${state.roll===null?"--":state.roll}`;
+		aiText.textContent = state.aiEnabled ? `AI: ${state.aiLevel.toUpperCase()} (${state.aiColor===LIGHT?"WHITE":"BLACK"})` : "AI: OFF";
+		msgText.textContent = state.gameOver ? `${state.winner||""} wins` : (state.message || "Ready");
+		capText.textContent = `Borne Off W:${state.borne[LIGHT]} B:${state.borne[DARK]}`;
+		if (state.lastMove) {
+			const mv = state.lastMove;
+			lastMoveText.textContent = `Last: ${(mv.turn===LIGHT?"W":"B")} r${mv.roll} ${mv.from}->${mv.to===BEAR_OFF?"off":mv.to}`;
+		} else lastMoveText.textContent = "Last: --";
+		renderHistory();
+		const myTurn = !state.menuActive && !state.gameOver && (!state.aiEnabled || state.turn !== state.aiColor);
+		hudBtnRoll.disabled = !myTurn || state.roll !== null;
+		hudBtnUndo.disabled = state.moveHistory.length === 0;
+	}
+
+	function applyModeUI() { [btn1p, btn2p].forEach(b => b.classList.remove("active")); (selectedMode==="1p"?btn1p:btn2p).classList.add("active"); }
+	function setDifficulty(level) { state.aiLevel = level; selectedDiff = level; applyDifficultyUI(); updateHud(); }
+	function applyDifficultyUI() { [btnEasy, btnMed, btnHard].forEach(b => b.classList.remove("active")); ({easy:btnEasy, medium:btnMed, hard:btnHard})[state.aiLevel].classList.add("active"); selectedDiff = state.aiLevel; }
+	function cycleDiff(delta) { const diffs=["easy","medium","hard"]; const idx=diffs.indexOf(selectedDiff); selectedDiff=diffs[(idx+delta+diffs.length)%diffs.length]; state.aiLevel=selectedDiff; applyDifficultyUI(); }
+
+	function start1P() { state.aiEnabled=true; state.aiColor=DARK; state.menuActive=false; startOverlay.style.display="none"; setBoardInput(true); resetGame(); applyDifficultyUI(); render(); updateHud(); maybeRunAI(); }
+	function start2P() { state.aiEnabled=false; state.menuActive=false; startOverlay.style.display="none"; setBoardInput(true); resetGame(); applyDifficultyUI(); render(); updateHud(); }
+	function startSelected() { state.aiLevel = selectedDiff; if (selectedMode==="1p") start1P(); else start2P(); }
+
+	function render() { drawBoard(); drawPieces(); }
+
+	// Init
+	resetGame();
+	resize();
+	applyDifficultyUI();
+	applyModeUI();
+	setBoardInput(false);
+	render();
+	updateHud();
+
+	// Events
+	uiLayer.addEventListener("mousedown", handlePointer);
+	window.addEventListener("resize", () => { resize(); render(); });
+	window.addEventListener("keydown", handleKey);
+	btn1p.addEventListener("click", () => { selectedMode="1p"; applyModeUI(); });
+	btn2p.addEventListener("click", () => { selectedMode="2p"; applyModeUI(); });
+	btnEasy.addEventListener("click", () => setDifficulty("easy"));
+	btnMed.addEventListener("click", () => setDifficulty("medium"));
+	btnHard.addEventListener("click", () => setDifficulty("hard"));
+	btnStartOverlay.addEventListener("click", startSelected);
+	btnRules.addEventListener("click", () => toggleRules(true));
+	closeRules.addEventListener("click", () => toggleRules(false));
+	hudBtnStart.addEventListener("click", showStartOverlay);
+	hudBtnRoll.addEventListener("click", rollDice);
+	hudBtnUndo.addEventListener("click", () => { undo(); render(); updateHud(); });
+	hudBtnHistory.addEventListener("click", () => toggleHistory());
+	btnHistoryClose.addEventListener("click", () => toggleHistory(false));
+
+})();
+</script>
+</body>
+</html>

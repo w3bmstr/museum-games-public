@@ -1,0 +1,933 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Go – Standalone</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    background: #0f0f12;
+    overflow: hidden;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    color: #eee;
+  }
+  #game-container {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    background: #0f0f12;
+  }
+  canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+  .layer-board { z-index: 0; pointer-events: none; }
+  .layer-pieces { z-index: 1; pointer-events: none; }
+  .layer-ui { z-index: 2; }
+  #start-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.7);
+    z-index: 10;
+  }
+  #start-card {
+    background: #1d1d1f;
+    border: 1px solid #333;
+    border-radius: 12px;
+    padding: 18px 22px;
+    color: #f5f5f5;
+    min-width: 280px;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.35);
+  }
+  #start-card h2 { margin: 0 0 10px 0; font-size: 20px; }
+  #start-card p { margin: 0 0 12px 0; font-size: 14px; color: #ccc; }
+  #start-card .btn-row { display: flex; gap: 10px; margin-top: 10px; }
+  #start-card button {
+    flex: 1;
+    padding: 10px 12px;
+    border: none;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #4fc3f7, #1976d2);
+    color: #fff;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  #start-card button.secondary { background: #444; }
+  #start-card button.active { outline: 2px solid #fff; }
+  #hud {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .panel {
+    background: rgba(0,0,0,0.5);
+    border: 1px solid #333;
+    border-radius: 10px;
+    padding: 10px 12px;
+    min-width: 220px;
+    color: #eee;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+  }
+  .panel h4 { margin: 0 0 6px 0; font-size: 13px; letter-spacing: 0.5px; color: #9cf; }
+  .panel p { margin: 4px 0; font-size: 13px; }
+  #controls { display: flex; gap: 8px; flex-wrap: wrap; }
+  #controls button { padding: 8px 10px; border: none; border-radius: 8px; background: #2d2d33; color: #eee; cursor: pointer; font-size: 13px; }
+  #controls button.primary { background: linear-gradient(135deg, #4fc3f7, #1976d2); color: #fff; }
+  .history-panel { position: relative; max-height: 260px; overflow-y: auto; font-family: monospace; font-size: 12px; }
+  .history-panel .move-line { margin: 2px 0; }
+  .history-close { position: absolute; top: 6px; right: 6px; padding: 4px 8px; border: none; border-radius: 6px; background: #2d2d33; color: #eee; cursor: pointer; font-size: 11px; }
+  #btn-history { display: none; }
+  #rules-overlay {
+    position: absolute; inset: 0;
+    display: none; align-items: center; justify-content: center;
+    background: rgba(0,0,0,0.7); z-index: 11;
+  }
+  #rules-overlay.show { display: flex; }
+  #rules-card {
+    background: #1d1d1f; border: 1px solid #333; border-radius: 12px;
+    padding: 18px 22px; color: #f5f5f5; max-width: 640px; width: 90%;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.35); line-height: 1.45;
+  }
+  #rules-card h3 { margin: 0 0 8px 0; font-size: 18px; }
+  #rules-card ul { margin: 8px 0 0 18px; padding: 0; }
+  #rules-card li { margin: 4px 0; }
+  #close-rules { margin-top: 12px; padding: 8px 12px; border: none; border-radius: 8px; background: #444; color: #fff; cursor: pointer; }
+
+  /* Mobile layout to avoid history overlap */
+  @media (max-width: 720px) {
+    #hud { position: fixed; top: auto; bottom: 0; left: 0; right: 0; flex-direction: row; gap: 6px; padding: 6px; background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.45) 40%); backdrop-filter: blur(8px); }
+    #hud .panel { min-width: 0; flex: 1; }
+    #history { display: none; position: fixed; right: 8px; bottom: 78px; width: 82vw; max-width: 380px; max-height: 55vh; z-index: 12; background: rgba(0,0,0,0.85); border-radius: 10px; }
+    #history.show { display: block; }
+    #btn-history { display: inline-block; }
+  }
+</style>
+</head>
+<body>
+<div id="game-container">
+  <div id="hud">
+    <div class="panel">
+      <h4>Status</h4>
+      <p id="turn-text">Turn: --</p>
+      <p id="ai-text">AI: --</p>
+      <p id="msg-text">Ready</p>
+      <p id="cap-text">Captures B:0 W:0</p>
+      <p id="pass-text">Passes: 0</p>
+      <p id="lastmove-text">Last: --</p>
+    </div>
+    <div id="controls" class="panel">
+      <button id="btn-start" class="primary">New Game</button>
+      <button id="btn-reset">Reset</button>
+      <button id="btn-undo">Undo</button>
+      <button id="btn-pass">Pass</button>
+      <button id="btn-history">History</button>
+      <button id="btn-rules">Rules</button>
+    </div>
+    <div id="history" class="panel history-panel">
+      <h4>Moves</h4>
+      <button id="btn-history-close" class="history-close">Close</button>
+      <div id="move-list"></div>
+    </div>
+  </div>
+  <div id="start-overlay">
+    <div id="start-card">
+      <h2>Go</h2>
+      <p>Select mode</p>
+      <div class="btn-row">
+        <button id="btn-1p">1 Player (vs AI)</button>
+        <button id="btn-2p" class="secondary">2 Players</button>
+      </div>
+      <p style="margin-top:12px; margin-bottom:6px;">AI Difficulty</p>
+      <div class="btn-row">
+        <button id="btn-easy" class="secondary">Easy</button>
+        <button id="btn-med" class="active">Medium</button>
+        <button id="btn-hard" class="secondary">Hard</button>
+      </div>
+      <div class="btn-row" style="margin-top:12px;">
+        <button id="btn-start-overlay" class="primary">Start</button>
+      </div>
+    </div>
+  </div>
+  <div id="rules-overlay">
+    <div id="rules-card">
+      <h3>Rules</h3>
+      <ul>
+        <li>19×19 board. Black plays first.</li>
+        <li>Place on empty intersections; capture by removing opponent groups with no liberties.</li>
+        <li>No suicide; simple ko (cannot repeat previous board position).</li>
+        <li>Two consecutive passes end the game; scoring: stones + territory + captures (no komi here).</li>
+        <li>Controls: click/tap to place, U/Undo, R/Reset, P/Pass, arrows + Enter to place, V toggles AI. Controller: A place, B pass, X reset, Y undo, D-pad/LS move cursor.</li>
+      </ul>
+      <button id="close-rules">Close</button>
+    </div>
+  </div>
+</div>
+<script>
+// Standalone Go with DOM HUD and mobile-friendly history
+(function() {
+  const SIZE = 19;
+  const BLACK = 1;
+  const WHITE = 2;
+  const STAR_POINTS = [3, 9, 15];
+  const COL_LABELS = "ABCDEFGHJKLMNOPQRST";
+  const dpr = window.devicePixelRatio || 1;
+
+  const container = document.getElementById("game-container");
+  const hud = document.getElementById("hud");
+  const startOverlay = document.getElementById("start-overlay");
+  const btn1p = document.getElementById("btn-1p");
+  const btn2p = document.getElementById("btn-2p");
+  const btnEasy = document.getElementById("btn-easy");
+  const btnMed = document.getElementById("btn-med");
+  const btnHard = document.getElementById("btn-hard");
+  const btnStartOverlay = document.getElementById("btn-start-overlay");
+  const btnRules = document.getElementById("btn-rules");
+  const rulesOverlay = document.getElementById("rules-overlay");
+  const closeRules = document.getElementById("close-rules");
+  const hudBtnStart = document.getElementById("btn-start");
+  const hudBtnReset = document.getElementById("btn-reset");
+  const hudBtnUndo = document.getElementById("btn-undo");
+  const hudBtnPass = document.getElementById("btn-pass");
+  const hudBtnHistory = document.getElementById("btn-history");
+  const btnHistoryClose = document.getElementById("btn-history-close");
+  const historyPanel = document.getElementById("history");
+  const turnText = document.getElementById("turn-text");
+  const aiText = document.getElementById("ai-text");
+  const msgText = document.getElementById("msg-text");
+  const capText = document.getElementById("cap-text");
+  const passText = document.getElementById("pass-text");
+  const lastMoveText = document.getElementById("lastmove-text");
+  const moveList = document.getElementById("move-list");
+
+  const boardLayer = document.createElement("canvas");
+  const piecesLayer = document.createElement("canvas");
+  const uiLayer = document.createElement("canvas");
+  boardLayer.className = "layer-board";
+  piecesLayer.className = "layer-pieces";
+  uiLayer.className = "layer-ui";
+  container.appendChild(boardLayer);
+  container.appendChild(piecesLayer);
+  container.appendChild(uiLayer);
+
+  const layout = { width: 0, height: 0, boardSize: 0, cellSize: 0, offsetX: 0, offsetY: 0 };
+
+  const state = {
+    board: Array.from({ length: SIZE }, () => Array(SIZE).fill(0)),
+    turn: BLACK,
+    moveHistory: [],
+    lastMove: null,
+    lastBoardHash: "",
+    captures: { [BLACK]: 0, [WHITE]: 0 },
+    passes: 0,
+    gameOver: false,
+    winner: null,
+    score: { black: 0, white: 0 },
+    message: "",
+    cursor: { x: Math.floor(SIZE / 2), y: Math.floor(SIZE / 2) },
+    aiEnabled: true,
+    aiColor: WHITE,
+    thinking: false,
+    aiLevel: "medium",
+    menuActive: true
+  };
+
+  let lastPadMove = 0;
+  const padRepeatMs = 180;
+  let prevButtons = [];
+  let selectedMode = "1p";
+  let selectedDiff = "medium";
+
+  function hashBoard(board) {
+    return board.map(row => row.join("")).join("|");
+  }
+
+  function neighbors(x, y) {
+    return [
+      [x + 1, y],
+      [x - 1, y],
+      [x, y + 1],
+      [x, y - 1]
+    ].filter(([nx, ny]) => nx >= 0 && nx < SIZE && ny >= 0 && ny < SIZE);
+  }
+
+  function resetBoard() {
+    for (let y = 0; y < SIZE; y++) {
+      for (let x = 0; x < SIZE; x++) state.board[y][x] = 0;
+    }
+    state.turn = BLACK;
+    state.moveHistory = [];
+    state.lastMove = null;
+    state.lastBoardHash = hashBoard(state.board);
+    state.captures = { [BLACK]: 0, [WHITE]: 0 };
+    state.passes = 0;
+    state.gameOver = false;
+    state.winner = null;
+    state.score = { black: 0, white: 0 };
+    state.message = "";
+    updateHud();
+  }
+
+  function resize() {
+    layout.width = window.innerWidth;
+    layout.height = window.innerHeight;
+
+    [boardLayer, piecesLayer, uiLayer].forEach(canvas => {
+      canvas.width = layout.width * dpr;
+      canvas.height = layout.height * dpr;
+      canvas.style.width = `${layout.width}px`;
+      canvas.style.height = `${layout.height}px`;
+      const ctx = canvas.getContext("2d");
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    });
+
+    const isMobile = window.matchMedia("(max-width: 720px)").matches;
+    const hudRect = hud.getBoundingClientRect();
+    const leftPad = isMobile ? 0 : (hudRect.right + 12);
+    const rightPad = isMobile ? 0 : 12;
+    const availWidth = Math.max(420, layout.width - leftPad - rightPad);
+    const maxBoardSize = Math.min(availWidth, layout.height * 0.95);
+
+    layout.boardSize = maxBoardSize;
+    layout.cellSize = layout.boardSize / (SIZE - 1);
+    layout.offsetX = leftPad + Math.max(0, (availWidth - layout.boardSize) / 2);
+    layout.offsetY = Math.max(0, (layout.height - layout.boardSize) / 2);
+  }
+
+  function drawBoard(ctx) {
+    ctx.clearRect(0, 0, layout.width, layout.height);
+    ctx.fillStyle = "#0f0f12";
+    ctx.fillRect(0, 0, layout.width, layout.height);
+
+    const grad = ctx.createLinearGradient(layout.offsetX, layout.offsetY, layout.offsetX + layout.boardSize, layout.offsetY + layout.boardSize);
+    grad.addColorStop(0, "#b28a5a");
+    grad.addColorStop(1, "#d9b37c");
+    ctx.fillStyle = grad;
+    ctx.fillRect(layout.offsetX, layout.offsetY, layout.boardSize, layout.boardSize);
+
+    ctx.strokeStyle = "#000";
+    ctx.lineWidth = 1.5;
+    for (let i = 0; i < SIZE; i++) {
+      const x = layout.offsetX + i * layout.cellSize;
+      ctx.beginPath();
+      ctx.moveTo(x, layout.offsetY);
+      ctx.lineTo(x, layout.offsetY + layout.boardSize);
+      ctx.stroke();
+
+      const y = layout.offsetY + i * layout.cellSize;
+      ctx.beginPath();
+      ctx.moveTo(layout.offsetX, y);
+      ctx.lineTo(layout.offsetX + layout.boardSize, y);
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = "#000";
+    for (const ry of STAR_POINTS) {
+      for (const rx of STAR_POINTS) {
+        const sx = layout.offsetX + rx * layout.cellSize;
+        const sy = layout.offsetY + ry * layout.cellSize;
+        ctx.beginPath();
+        ctx.arc(sx, sy, layout.cellSize * 0.12, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+
+  function drawPieces(ctx) {
+    ctx.clearRect(0, 0, layout.width, layout.height);
+    for (let y = 0; y < SIZE; y++) {
+      for (let x = 0; x < SIZE; x++) {
+        const v = state.board[y][x];
+        if (!v) continue;
+
+        const cx = layout.offsetX + x * layout.cellSize;
+        const cy = layout.offsetY + y * layout.cellSize;
+        const r = layout.cellSize * 0.45;
+
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+
+        const grad = ctx.createRadialGradient(
+          cx - r * 0.3, cy - r * 0.3, r * 0.1,
+          cx, cy, r
+        );
+        if (v === BLACK) {
+          grad.addColorStop(0, "#555");
+          grad.addColorStop(1, "#000");
+        } else {
+          grad.addColorStop(0, "#fff");
+          grad.addColorStop(1, "#ccc");
+        }
+
+        ctx.fillStyle = grad;
+        ctx.fill();
+        ctx.strokeStyle = "rgba(0,0,0,0.4)";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        if (state.lastMove && state.lastMove.x === x && state.lastMove.y === y) {
+          ctx.fillStyle = v === BLACK ? "#fff" : "#000";
+          ctx.beginPath();
+          ctx.arc(cx, cy, r * 0.25, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+  }
+
+  function drawUI(ctx) {
+    ctx.clearRect(0, 0, layout.width, layout.height);
+    if (state.gameOver) {
+      ctx.fillStyle = "rgba(0,0,0,0.7)";
+      ctx.fillRect(14, 14, 320, 60);
+      ctx.fillStyle = "#fff";
+      ctx.font = "16px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+      ctx.fillText(`Winner: ${state.winner}`, 24, 44);
+      ctx.fillText(state.message, 24, 64);
+    }
+  }
+
+  function drawCursor(ctx) {
+    const { x, y } = state.cursor;
+    const cx = layout.offsetX + x * layout.cellSize;
+    const cy = layout.offsetY + y * layout.cellSize;
+    const r = layout.cellSize * 0.5;
+    ctx.strokeStyle = "#4fc3f7";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  function render() {
+    drawBoard(boardLayer.getContext("2d"));
+    drawPieces(piecesLayer.getContext("2d"));
+    const uiCtx = uiLayer.getContext("2d");
+    drawUI(uiCtx);
+    drawCursor(uiCtx);
+  }
+
+  function coord(x, y) {
+    return `${COL_LABELS[x]}${SIZE - y}`;
+  }
+
+  function updateHud() {
+    turnText.textContent = `Turn: ${state.turn === BLACK ? "BLACK" : "WHITE"}`;
+    aiText.textContent = state.aiEnabled ? `AI: ${state.aiLevel.toUpperCase()} (${state.aiColor === BLACK ? "BLACK" : "WHITE"})` : "AI: OFF";
+    msgText.textContent = state.message || "Ready";
+    capText.textContent = `Captures B:${state.captures[BLACK]} W:${state.captures[WHITE]}`;
+    passText.textContent = `Passes: ${state.passes}`;
+    if (state.lastMove) lastMoveText.textContent = `Last: ${coord(state.lastMove.x, state.lastMove.y)} (${state.lastMove.player === BLACK ? "B" : "W"})`;
+    else lastMoveText.textContent = "Last: --";
+    renderHistory();
+  }
+
+  function renderHistory() {
+    moveList.innerHTML = state.moveHistory.map((mv, i) => {
+      if (mv.pass) return `<div class="move-line">${i + 1}. ${mv.player === BLACK ? "B" : "W"} pass</div>`;
+      const cap = mv.captured ? ` x${mv.captured}` : "";
+      return `<div class="move-line">${i + 1}. ${mv.player === BLACK ? "B" : "W"} ${coord(mv.x, mv.y)}${cap}</div>`;
+    }).join("");
+  }
+
+  function toggleRules(force) {
+    const show = force !== undefined ? force : !rulesOverlay.classList.contains("show");
+    rulesOverlay.classList.toggle("show", show);
+  }
+
+  function toggleHistory(force) {
+    const show = force !== undefined ? force : !historyPanel.classList.contains("show");
+    historyPanel.classList.toggle("show", show);
+  }
+
+  function showStartOverlay() {
+    startOverlay.style.display = "flex";
+    state.menuActive = true;
+  }
+
+  function collectGroup(x, y, board) {
+    const color = board[y][x];
+    const seen = new Set();
+    const liberties = new Set();
+    const stones = [];
+    const stack = [[x, y]];
+    seen.add(`${x},${y}`);
+    while (stack.length) {
+      const [cx, cy] = stack.pop();
+      stones.push([cx, cy]);
+      for (const [nx, ny] of neighbors(cx, cy)) {
+        const v = board[ny][nx];
+        if (v === 0) liberties.add(`${nx},${ny}`);
+        else if (v === color) {
+          const key = `${nx},${ny}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            stack.push([nx, ny]);
+          }
+        }
+      }
+    }
+    return { stones, liberties };
+  }
+
+  function placeStoneWithRules(x, y) {
+    const player = state.turn;
+    state.board[y][x] = player;
+
+    let totalCaptured = 0;
+    for (const [nx, ny] of neighbors(x, y)) {
+      if (state.board[ny][nx] === 0 || state.board[ny][nx] === player) continue;
+      const { stones, liberties } = collectGroup(nx, ny, state.board);
+      if (liberties.size === 0) {
+        for (const [sx, sy] of stones) state.board[sy][sx] = 0;
+        totalCaptured += stones.length;
+      }
+    }
+
+    const { liberties: myLiberties } = collectGroup(x, y, state.board);
+    if (myLiberties.size === 0) {
+      state.board[y][x] = 0;
+      state.message = "Illegal: suicide";
+      updateHud();
+      return false;
+    }
+
+    const newHash = hashBoard(state.board);
+    if (newHash === state.lastBoardHash) {
+      state.board[y][x] = 0;
+      state.message = "Illegal: ko";
+      updateHud();
+      return false;
+    }
+
+    state.captures[player] += totalCaptured;
+    state.lastBoardHash = newHash;
+    state.lastMove = { x, y, player };
+    state.moveHistory.push({ x, y, player, captured: totalCaptured });
+    state.passes = 0;
+    state.message = totalCaptured ? `Captured ${totalCaptured}` : "";
+    state.turn = player === BLACK ? WHITE : BLACK;
+    updateHud();
+    return true;
+  }
+
+  function replayHistory(moves) {
+    for (const mv of moves) {
+      if (mv.pass) {
+        state.turn = mv.player === BLACK ? WHITE : BLACK;
+        state.passes += 1;
+        continue;
+      }
+      state.turn = mv.player;
+      state.board[mv.y][mv.x] = mv.player;
+      let totalCaptured = 0;
+      for (const [nx, ny] of neighbors(mv.x, mv.y)) {
+        if (state.board[ny][nx] === 0 || state.board[ny][nx] === mv.player) continue;
+        const { stones, liberties } = collectGroup(nx, ny, state.board);
+        if (liberties.size === 0) {
+          for (const [sx, sy] of stones) state.board[sy][sx] = 0;
+          totalCaptured += stones.length;
+        }
+      }
+      state.captures[mv.player] += totalCaptured;
+      state.lastMove = { x: mv.x, y: mv.y, player: mv.player };
+      state.lastBoardHash = hashBoard(state.board);
+    }
+    state.turn = state.turn === BLACK ? WHITE : BLACK;
+    state.message = "Undid";
+  }
+
+  function undoSafe() {
+    if (state.moveHistory.length === 0) return;
+    const moves = state.moveHistory.slice(0, -1);
+    resetBoard();
+    replayHistory(moves);
+    state.moveHistory = moves;
+    state.gameOver = false;
+    state.winner = null;
+    state.score = { black: 0, white: 0 };
+    let trailingPasses = 0;
+    for (let i = moves.length - 1; i >= 0; i--) {
+      if (moves[i].pass) trailingPasses++; else break;
+    }
+    state.passes = trailingPasses;
+    updateHud();
+    maybeRunAI();
+  }
+
+  function moveCursor(dx, dy) {
+    if (state.menuActive) return;
+    state.cursor.x = Math.max(0, Math.min(SIZE - 1, state.cursor.x + dx));
+    state.cursor.y = Math.max(0, Math.min(SIZE - 1, state.cursor.y + dy));
+    state.message = "";
+  }
+
+  function placeCursor() {
+    const { x, y } = state.cursor;
+    if (state.gameOver) return;
+    if (state.board[y][x] !== 0) return;
+    const ok = placeStoneWithRules(x, y);
+    render();
+    if (ok) maybeRunAI();
+  }
+
+  function pass(fromAI = false) {
+    if (state.gameOver || state.menuActive) return;
+    state.moveHistory.push({ pass: true, player: state.turn });
+    state.lastMove = null;
+    state.turn = state.turn === BLACK ? WHITE : BLACK;
+    state.passes += 1;
+    state.message = "Pass";
+    if (state.passes >= 2) {
+      scoreGame();
+    } else {
+      updateHud();
+      if (!fromAI) maybeRunAI();
+    }
+  }
+
+  function setDifficulty(level) {
+    state.aiLevel = level;
+    selectedDiff = level;
+    applyDifficultyUI();
+    updateHud();
+  }
+
+  function applyDifficultyUI() {
+    [btnEasy, btnMed, btnHard].forEach(btn => btn.classList.remove("active"));
+    if (state.aiLevel === "easy") btnEasy.classList.add("active");
+    else if (state.aiLevel === "hard") btnHard.classList.add("active");
+    else btnMed.classList.add("active");
+  }
+
+  function scoreGame() {
+    const counts = { black: 0, white: 0 };
+    for (let y = 0; y < SIZE; y++) {
+      for (let x = 0; x < SIZE; x++) {
+        if (state.board[y][x] === BLACK) counts.black += 1;
+        else if (state.board[y][x] === WHITE) counts.white += 1;
+      }
+    }
+
+    const visited = Array.from({ length: SIZE }, () => Array(SIZE).fill(false));
+    for (let y = 0; y < SIZE; y++) {
+      for (let x = 0; x < SIZE; x++) {
+        if (visited[y][x] || state.board[y][x] !== 0) continue;
+        const region = [];
+        const queue = [[x, y]];
+        visited[y][x] = true;
+        const bordering = new Set();
+        while (queue.length) {
+          const [cx, cy] = queue.pop();
+          region.push([cx, cy]);
+          for (const [nx, ny] of neighbors(cx, cy)) {
+            const v = state.board[ny][nx];
+            if (v === 0 && !visited[ny][nx]) {
+              visited[ny][nx] = true;
+              queue.push([nx, ny]);
+            } else if (v === BLACK) bordering.add(BLACK);
+            else if (v === WHITE) bordering.add(WHITE);
+          }
+        }
+        if (bordering.size === 1) {
+          const owner = bordering.has(BLACK) ? "black" : "white";
+          counts[owner] += region.length;
+        }
+      }
+    }
+
+    state.score = counts;
+    const blackScore = counts.black + state.captures[BLACK];
+    const whiteScore = counts.white + state.captures[WHITE];
+    if (blackScore === whiteScore) state.winner = "Draw";
+    else state.winner = blackScore > whiteScore ? "Black" : "White";
+    state.message = `Final B:${blackScore} W:${whiteScore}`;
+    state.gameOver = true;
+    updateHud();
+  }
+
+  function cloneBoard(board) {
+    return board.map(row => row.slice());
+  }
+
+  function simulateMove(x, y, player, prevHash) {
+    if (state.board[y][x] !== 0) return { legal: false };
+    const temp = cloneBoard(state.board);
+    temp[y][x] = player;
+
+    let captured = 0;
+    for (const [nx, ny] of neighbors(x, y)) {
+      if (temp[ny][nx] === 0 || temp[ny][nx] === player) continue;
+      const { stones, liberties } = collectGroup(nx, ny, temp);
+      if (liberties.size === 0) {
+        for (const [sx, sy] of stones) temp[sy][sx] = 0;
+        captured += stones.length;
+      }
+    }
+
+    const { liberties: myLibs } = collectGroup(x, y, temp);
+    if (myLibs.size === 0) return { legal: false };
+
+    const hash = hashBoard(temp);
+    if (hash === prevHash) return { legal: false };
+
+    return { legal: true, captured, hash };
+  }
+
+  function listLegalMoves(player) {
+    const moves = [];
+    const prevHash = state.lastBoardHash;
+    for (let y = 0; y < SIZE; y++) {
+      for (let x = 0; x < SIZE; x++) {
+        if (state.board[y][x] !== 0) continue;
+        const sim = simulateMove(x, y, player, prevHash);
+        if (sim.legal) moves.push({ x, y, captured: sim.captured });
+      }
+    }
+    return moves;
+  }
+
+  function aiChooseMove() {
+    const moves = listLegalMoves(state.aiColor);
+    if (moves.length === 0) return null;
+    if (state.aiLevel === "easy") {
+      return moves[Math.floor(Math.random() * moves.length)];
+    }
+    const center = (SIZE - 1) / 2;
+    let bestScore = -Infinity;
+    const scored = [];
+    for (const m of moves) {
+      let score = m.captured;
+      if (state.aiLevel === "hard") {
+        const dist = Math.abs(m.x - center) + Math.abs(m.y - center);
+        score = m.captured * 10 - dist * 0.25;
+      }
+      scored.push({ m, score });
+      if (score > bestScore) bestScore = score;
+    }
+    const best = scored.filter(s => s.score >= bestScore - 0.001).map(s => s.m);
+    return best[Math.floor(Math.random() * best.length)];
+  }
+
+  function maybeRunAI() {
+    if (!state.aiEnabled || state.gameOver || state.menuActive || state.turn !== state.aiColor || state.thinking) return;
+    state.thinking = true;
+    setTimeout(() => {
+      const move = aiChooseMove();
+      if (move) {
+        const prevFlag = state.aiEnabled;
+        state.aiEnabled = false;
+        placeStoneWithRules(move.x, move.y);
+        state.aiEnabled = prevFlag;
+      } else {
+        const prevFlag = state.aiEnabled;
+        state.aiEnabled = false;
+        pass(true);
+        state.aiEnabled = prevFlag;
+      }
+      state.thinking = false;
+      render();
+      updateHud();
+    }, 120);
+  }
+
+  function handlePointer(event) {
+    if (state.menuActive) return;
+    if (event.button !== 0) return;
+
+    const mx = event.offsetX;
+    const my = event.offsetY;
+    const xLocal = mx - layout.offsetX;
+    const yLocal = my - layout.offsetY;
+
+    if (xLocal < -layout.cellSize / 2 || xLocal > layout.boardSize + layout.cellSize / 2 ||
+        yLocal < -layout.cellSize / 2 || yLocal > layout.boardSize + layout.cellSize / 2) {
+      return;
+    }
+
+    const gx = Math.round(xLocal / layout.cellSize);
+    const gy = Math.round(yLocal / layout.cellSize);
+
+    if (gx < 0 || gx >= SIZE || gy < 0 || gy >= SIZE) return;
+    if (state.gameOver) return;
+    if (state.board[gy][gx] !== 0) return;
+
+    const ok = placeStoneWithRules(gx, gy);
+    render();
+    if (ok) maybeRunAI();
+  }
+
+  function handleKey(event) {
+    const key = event.key.toLowerCase();
+    if (rulesOverlay.classList.contains("show")) {
+      if (["h","escape","enter"," "].includes(key)) toggleRules(false);
+      return;
+    }
+    if (state.menuActive) {
+      if (key === "1") { selectedMode = "1p"; applyModeUI(); }
+      else if (key === "2") { selectedMode = "2p"; applyModeUI(); }
+      else if (key === "arrowup" || key === "w") { cycleDiff(-1); }
+      else if (key === "arrowdown" || key === "s") { cycleDiff(1); }
+      else if (key === "enter" || key === " ") { startSelected(); }
+      return;
+    }
+    if (key === "r") {
+      resetBoard();
+      render();
+      updateHud();
+    } else if (key === "u") {
+      undoSafe();
+      render();
+    } else if (key === "p") {
+      pass();
+      render();
+    } else if (key === "arrowup") {
+      moveCursor(0, -1);
+      render();
+      updateHud();
+    } else if (key === "arrowdown") {
+      moveCursor(0, 1);
+      render();
+      updateHud();
+    } else if (key === "arrowleft") {
+      moveCursor(-1, 0);
+      render();
+      updateHud();
+    } else if (key === "arrowright") {
+      moveCursor(1, 0);
+      render();
+      updateHud();
+    } else if (key === "enter" || key === " ") {
+      placeCursor();
+      render();
+    } else if (key === "v") {
+      state.aiEnabled = !state.aiEnabled;
+      state.message = state.aiEnabled ? "AI enabled (White)" : "AI disabled";
+      updateHud();
+      render();
+    } else if (key === "h") {
+      toggleRules();
+    }
+  }
+
+  function start1P() {
+    state.aiEnabled = true;
+    state.aiColor = WHITE;
+    state.menuActive = false;
+    startOverlay.style.display = "none";
+    resetBoard();
+    applyDifficultyUI();
+    render();
+    updateHud();
+  }
+
+  function start2P() {
+    state.aiEnabled = false;
+    state.menuActive = false;
+    startOverlay.style.display = "none";
+    resetBoard();
+    applyDifficultyUI();
+    render();
+    updateHud();
+  }
+
+  function startSelected() {
+    state.aiLevel = selectedDiff;
+    if (selectedMode === "1p") start1P(); else start2P();
+  }
+
+  function applyModeUI() {
+    [btn1p, btn2p].forEach(b => b.classList.remove("active"));
+    if (selectedMode === "1p") btn1p.classList.add("active"); else btn2p.classList.add("active");
+  }
+
+  function cycleDiff(delta) {
+    const diffs = ["easy", "medium", "hard"];
+    const idx = diffs.indexOf(selectedDiff);
+    selectedDiff = diffs[(idx + delta + diffs.length) % diffs.length];
+    state.aiLevel = selectedDiff;
+    applyDifficultyUI();
+  }
+
+  // Init
+  resetBoard();
+  resize();
+  state.lastBoardHash = hashBoard(state.board);
+  applyDifficultyUI();
+  applyModeUI();
+  render();
+  updateHud();
+
+  // Start menu
+  btn1p.addEventListener("click", () => { selectedMode = "1p"; applyModeUI(); });
+  btn2p.addEventListener("click", () => { selectedMode = "2p"; applyModeUI(); });
+  btnEasy.addEventListener("click", () => setDifficulty("easy"));
+  btnMed.addEventListener("click", () => setDifficulty("medium"));
+  btnHard.addEventListener("click", () => setDifficulty("hard"));
+  btnStartOverlay.addEventListener("click", startSelected);
+
+  // Input
+  uiLayer.addEventListener("mousedown", handlePointer);
+  window.addEventListener("keydown", e => { handleKey(e); });
+  window.addEventListener("resize", () => { resize(); render(); });
+  btnRules.addEventListener("click", () => toggleRules(true));
+  closeRules.addEventListener("click", () => toggleRules(false));
+  hudBtnStart.addEventListener("click", showStartOverlay);
+  hudBtnReset.addEventListener("click", () => { resetBoard(); render(); updateHud(); });
+  hudBtnUndo.addEventListener("click", () => { undoSafe(); render(); updateHud(); });
+  hudBtnPass.addEventListener("click", () => { pass(); render(); updateHud(); });
+  hudBtnHistory.addEventListener("click", () => toggleHistory());
+  btnHistoryClose.addEventListener("click", () => toggleHistory(false));
+
+  // Gamepad support
+  function pollGamepad() {
+    const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+    const pad = pads && pads[0];
+    if (pad) {
+      const now = performance.now();
+      const axes = pad.axes || [];
+      const buttons = pad.buttons || [];
+      const dx = Math.abs(axes[0] || 0) > 0.35 ? (axes[0] > 0 ? 1 : -1) : 0;
+      const dy = Math.abs(axes[1] || 0) > 0.35 ? (axes[1] > 0 ? 1 : -1) : 0;
+      const dpadX = (buttons[15]?.pressed ? 1 : 0) - (buttons[14]?.pressed ? 1 : 0);
+      const dpadY = (buttons[13]?.pressed ? 1 : 0) - (buttons[12]?.pressed ? 1 : 0);
+      const moveX = dpadX || dx;
+      const moveY = dpadY || dy;
+      if ((moveX || moveY) && now - lastPadMove > padRepeatMs) {
+        moveCursor(moveX, moveY);
+        render();
+        updateHud();
+        lastPadMove = now;
+      }
+
+      const pressed = idx => buttons[idx]?.pressed;
+      const wasPressed = idx => prevButtons[idx];
+      const edge = idx => pressed(idx) && !wasPressed(idx);
+
+      if (edge(0)) { placeCursor(); render(); }
+      if (edge(1)) { pass(); render(); updateHud(); }
+      if (edge(2)) { resetBoard(); render(); updateHud(); }
+      if (edge(3)) { undoSafe(); render(); updateHud(); }
+
+      prevButtons = buttons.map(b => b?.pressed);
+    }
+    requestAnimationFrame(pollGamepad);
+  }
+  requestAnimationFrame(pollGamepad);
+})();
+</script>
+</body>
+</html>

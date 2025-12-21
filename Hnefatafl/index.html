@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Hnefatafl - Standalone</title>
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		width: 100%;
+		height: 100%;
+		background: #0f0f12;
+		overflow: hidden;
+		font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+		color: #eee;
+	}
+	#game-container {
+		position: relative;
+		width: 100vw;
+		height: 100vh;
+		overflow: hidden;
+		background: #0f0f12;
+	}
+	canvas {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		display: block;
+	}
+	.layer-board { z-index: 0; pointer-events: none; }
+	.layer-pieces { z-index: 1; pointer-events: none; }
+	.layer-ui { z-index: 2; }
+	#start-overlay {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: rgba(0,0,0,0.7);
+		z-index: 10;
+	}
+	#start-card {
+		background: #1d1d1f;
+		border: 1px solid #333;
+		border-radius: 12px;
+		padding: 18px 22px;
+		color: #f5f5f5;
+		min-width: 280px;
+		box-shadow: 0 12px 30px rgba(0,0,0,0.35);
+	}
+	#start-card h2 { margin: 0 0 10px 0; font-size: 20px; }
+	#start-card p { margin: 0 0 12px 0; font-size: 14px; color: #ccc; }
+	#start-card .btn-row { display: flex; gap: 10px; margin-top: 10px; }
+	#start-card button {
+		flex: 1;
+		padding: 10px 12px;
+		border: none;
+		border-radius: 8px;
+		background: linear-gradient(135deg, #ffb74d, #f57c00);
+		color: #fff;
+		font-weight: 700;
+		cursor: pointer;
+	}
+	#start-card button.secondary { background: #444; }
+	#start-card button.active { outline: 2px solid #fff; }
+	#hud {
+		position: absolute;
+		top: 10px;
+		left: 10px;
+		z-index: 5;
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+	.panel {
+		background: rgba(0,0,0,0.5);
+		border: 1px solid #333;
+		border-radius: 10px;
+		padding: 10px 12px;
+		min-width: 220px;
+		color: #eee;
+		box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+	}
+	.panel h4 { margin: 0 0 6px 0; font-size: 13px; letter-spacing: 0.5px; color: #ffd166; }
+	.panel p { margin: 4px 0; font-size: 13px; }
+	#controls { display: flex; gap: 8px; flex-wrap: wrap; }
+	#controls button { padding: 8px 10px; border: none; border-radius: 8px; background: #2d2d33; color: #eee; cursor: pointer; font-size: 13px; }
+	#controls button.primary { background: linear-gradient(135deg, #ffb74d, #f57c00); color: #fff; }
+	.history-panel { position: relative; max-height: 260px; overflow-y: auto; font-family: monospace; font-size: 12px; }
+	.history-panel .move-line { margin: 2px 0; }
+	.history-close { position: absolute; top: 6px; right: 6px; padding: 4px 8px; border: none; border-radius: 6px; background: #2d2d33; color: #eee; cursor: pointer; font-size: 11px; }
+	#btn-history { display: none; }
+	#rules-overlay {
+		position: absolute; inset: 0;
+		display: none; align-items: center; justify-content: center;
+		background: rgba(0,0,0,0.7); z-index: 11;
+	}
+	#rules-overlay.show { display: flex; }
+	#rules-card {
+		background: #1d1d1f; border: 1px solid #333; border-radius: 12px;
+		padding: 18px 22px; color: #f5f5f5; max-width: 640px; width: 90%;
+		box-shadow: 0 12px 30px rgba(0,0,0,0.35); line-height: 1.45;
+	}
+	#rules-card h3 { margin: 0 0 8px 0; font-size: 18px; }
+	#rules-card ul { margin: 8px 0 0 18px; padding: 0; }
+	#rules-card li { margin: 4px 0; }
+	#close-rules { margin-top: 12px; padding: 8px 12px; border: none; border-radius: 8px; background: #444; color: #fff; cursor: pointer; }
+
+	@media (max-width: 720px) {
+		#hud { position: fixed; top: auto; bottom: 0; left: 0; right: 0; flex-direction: row; gap: 6px; padding: 6px; background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.45) 40%); backdrop-filter: blur(8px); }
+		#hud .panel { min-width: 0; flex: 1; }
+		#history { display: none; position: fixed; right: 8px; bottom: 78px; width: 82vw; max-width: 380px; max-height: 55vh; z-index: 12; background: rgba(0,0,0,0.85); border-radius: 10px; }
+		#history.show { display: block; }
+		#btn-history { display: inline-block; }
+	}
+</style>
+</head>
+<body>
+<div id="game-container">
+	<div id="hud">
+		<div class="panel">
+			<h4>Status</h4>
+			<p id="turn-text">Turn: --</p>
+			<p id="ai-text">AI: --</p>
+			<p id="msg-text">Ready</p>
+			<p id="cap-text">Captures Att:0 Def:0</p>
+			<p id="lastmove-text">Last: --</p>
+		</div>
+		<div id="controls" class="panel">
+			<button id="btn-start" class="primary">New Game</button>
+			<button id="btn-reset">Reset</button>
+			<button id="btn-undo">Undo</button>
+			<button id="btn-history">History</button>
+			<button id="btn-rules">Rules</button>
+		</div>
+		<div id="history" class="panel history-panel">
+			<h4>Moves</h4>
+			<button id="btn-history-close" class="history-close">Close</button>
+			<div id="move-list"></div>
+		</div>
+	</div>
+	<div id="start-overlay">
+		<div id="start-card">
+			<h2>Hnefatafl</h2>
+			<p>Select mode and difficulty</p>
+			<div class="btn-row">
+				<button id="btn-1p">1 Player (vs AI)</button>
+				<button id="btn-2p" class="secondary">2 Players</button>
+			</div>
+			<p style="margin-top:12px; margin-bottom:6px;">AI Difficulty</p>
+			<div class="btn-row">
+				<button id="btn-easy" class="secondary">Easy</button>
+				<button id="btn-med" class="active">Medium</button>
+				<button id="btn-hard" class="secondary">Hard</button>
+			</div>
+			<div class="btn-row" style="margin-top:12px;">
+				<button id="btn-start-overlay" class="primary">Start</button>
+			</div>
+		</div>
+	</div>
+	<div id="rules-overlay">
+		<div id="rules-card">
+			<h3>Rules</h3>
+			<ul>
+				<li>Board: 11x11. Center throne and four corners are special squares. Only the king may occupy them.</li>
+				<li>Setup: King and 12 defenders in a diamond around the center. 24 attackers placed in a cross from the edges.</li>
+				<li>Movement: All pieces move any distance orthogonally (like rooks) without jumping. They cannot move onto throne/corners unless king.</li>
+				<li>Capture: Custodial capture. An enemy is captured when sandwiched orthogonally between the mover and a friendly piece or a hostile square (throne/corner). The king is captured when surrounded on all four orthogonal sides by attackers/hostile squares.</li>
+				<li>Win: Defenders win if the king reaches any corner. Attackers win if the king is captured.</li>
+				<li>Controls: mouse/touch click; keyboard arrows + Enter/Space; controller stick/D-pad move, A select/move, B cancel, X reset, LB undo, Y rules, Start opens start screen.</li>
+			</ul>
+			<button id="close-rules">Close</button>
+		</div>
+	</div>
+</div>
+<script>
+(function() {
+	const SIZE = 11;
+	const dpr = window.devicePixelRatio || 1;
+	const ATT = 1; // attackers
+	const DEF = 2; // defenders (king belongs to defenders)
+
+	const container = document.getElementById("game-container");
+	const hud = document.getElementById("hud");
+	const startOverlay = document.getElementById("start-overlay");
+	const btn1p = document.getElementById("btn-1p");
+	const btn2p = document.getElementById("btn-2p");
+	const btnEasy = document.getElementById("btn-easy");
+	const btnMed = document.getElementById("btn-med");
+	const btnHard = document.getElementById("btn-hard");
+	const btnStartOverlay = document.getElementById("btn-start-overlay");
+	const btnRules = document.getElementById("btn-rules");
+	const rulesOverlay = document.getElementById("rules-overlay");
+	const closeRules = document.getElementById("close-rules");
+	const hudBtnStart = document.getElementById("btn-start");
+	const hudBtnReset = document.getElementById("btn-reset");
+	const hudBtnUndo = document.getElementById("btn-undo");
+	const hudBtnHistory = document.getElementById("btn-history");
+	const btnHistoryClose = document.getElementById("btn-history-close");
+	const historyPanel = document.getElementById("history");
+	const turnText = document.getElementById("turn-text");
+	const aiText = document.getElementById("ai-text");
+	const msgText = document.getElementById("msg-text");
+	const capText = document.getElementById("cap-text");
+	const lastMoveText = document.getElementById("lastmove-text");
+	const moveList = document.getElementById("move-list");
+
+	const boardLayer = document.createElement("canvas");
+	const piecesLayer = document.createElement("canvas");
+	const uiLayer = document.createElement("canvas");
+	boardLayer.className = "layer-board";
+	piecesLayer.className = "layer-pieces";
+	uiLayer.className = "layer-ui";
+	container.appendChild(boardLayer);
+	container.appendChild(piecesLayer);
+	container.appendChild(uiLayer);
+
+	const layout = { width: 0, height: 0, cell: 0, offsetX: 0, offsetY: 0 };
+
+	const state = {
+		board: createEmptyBoard(),
+		turn: ATT,
+		moveHistory: [],
+		lastMove: null,
+		captures: { [ATT]: 0, [DEF]: 0 },
+		gameOver: false,
+		winner: null,
+		message: "",
+		cursor: { x: 5, y: 5 },
+		selected: null,
+		legal: [],
+		aiEnabled: true,
+		aiColor: ATT,
+		aiLevel: "medium",
+		thinking: false,
+		menuActive: true
+	};
+
+	const throne = { x: 5, y: 5 };
+	const corners = [
+		{ x: 0, y: 0 },
+		{ x: 0, y: SIZE - 1 },
+		{ x: SIZE - 1, y: 0 },
+		{ x: SIZE - 1, y: SIZE - 1 }
+	];
+
+	let selectedMode = "1p";
+	let selectedDiff = "medium";
+
+	function createEmptyBoard() { return Array.from({ length: SIZE }, () => Array(SIZE).fill(null)); }
+	function p(type, side) { return { type, side }; }
+	function isThrone(x, y) { return x === throne.x && y === throne.y; }
+	function isCorner(x, y) { return corners.some(c => c.x === x && c.y === y); }
+	function specialBlocked(x, y, piece) { return (isThrone(x, y) || isCorner(x, y)) && (!piece || piece.type !== "K"); }
+
+	function resetBoard() {
+		const b = createEmptyBoard();
+		// attackers cross
+		[[3,0],[4,0],[5,0],[6,0],[7,0],[5,1],[0,3],[5,3],[10,3],[1,4],[5,4],[9,4],[0,5],[1,5],[2,5],[3,5],[7,5],[8,5],[9,5],[10,5],[1,6],[5,6],[9,6],[0,7],[5,7],[10,7],[5,9],[3,10],[4,10],[5,10],[6,10],[7,10]].forEach(([x,y]) => b[y][x] = p("A", ATT));
+		// defenders diamond with king center
+		[[5,5,"K"],[5,4,"D"],[5,6,"D"],[4,5,"D"],[6,5,"D"],[4,4,"D"],[6,6,"D"],[4,6,"D"],[6,4,"D"],[5,3,"D"],[5,7,"D"],[3,5,"D"],[7,5,"D"]].forEach(([x,y,t]) => b[y][x] = p(t, DEF));
+
+		state.board = b;
+		state.turn = ATT;
+		state.moveHistory = [];
+		state.lastMove = null;
+		state.captures = { [ATT]: 0, [DEF]: 0 };
+		state.gameOver = false;
+		state.winner = null;
+		state.message = "";
+		state.selected = null;
+		state.legal = [];
+		state.cursor = { x: 5, y: 5 };
+		updateHud();
+	}
+
+	function resize() {
+		layout.width = window.innerWidth;
+		layout.height = window.innerHeight;
+		[boardLayer, piecesLayer, uiLayer].forEach(c => {
+			c.width = layout.width * dpr;
+			c.height = layout.height * dpr;
+			c.style.width = `${layout.width}px`;
+			c.style.height = `${layout.height}px`;
+			const ctx = c.getContext("2d");
+			ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+		});
+
+		const isMobile = window.matchMedia("(max-width: 720px)").matches;
+		const hudRect = hud.getBoundingClientRect();
+		const leftPad = isMobile ? 0 : (hudRect.right + 12);
+		const rightPad = isMobile ? 0 : 12;
+		const availWidth = Math.max(460, layout.width - leftPad - rightPad);
+		const maxBoardSize = Math.min(availWidth, layout.height * 0.92);
+
+		layout.cell = maxBoardSize / SIZE;
+		const boardPixel = layout.cell * SIZE;
+		layout.offsetX = leftPad + (availWidth - boardPixel) / 2;
+		layout.offsetY = (layout.height - boardPixel) / 2;
+		maybeRunAI();
+	}
+
+	function drawBoard(ctx) {
+		ctx.clearRect(0, 0, layout.width, layout.height);
+		ctx.fillStyle = "#0f0f12";
+		ctx.fillRect(0, 0, layout.width, layout.height);
+		for (let y = 0; y < SIZE; y++) {
+			for (let x = 0; x < SIZE; x++) {
+				const even = (x + y) % 2 === 0;
+				let color = even ? "#2f2f36" : "#454552";
+				if (isThrone(x, y)) color = "#5c4b99";
+				else if (isCorner(x, y)) color = "#8d334c";
+				ctx.fillStyle = color;
+				ctx.fillRect(layout.offsetX + x * layout.cell, layout.offsetY + y * layout.cell, layout.cell, layout.cell);
+			}
+		}
+	}
+
+	function drawPieces(ctx) {
+		ctx.clearRect(0, 0, layout.width, layout.height);
+		ctx.font = `${layout.cell * 0.6}px sans-serif`;
+		ctx.textAlign = "center";
+		ctx.textBaseline = "middle";
+		for (let y = 0; y < SIZE; y++) {
+			for (let x = 0; x < SIZE; x++) {
+				const piece = state.board[y][x];
+				if (!piece) continue;
+				const cx = layout.offsetX + x * layout.cell + layout.cell / 2;
+				const cy = layout.offsetY + y * layout.cell + layout.cell / 2;
+				ctx.fillStyle = piece.side === ATT ? "#f57c00" : (piece.type === "K" ? "#ffd166" : "#f5f5f5");
+				ctx.strokeStyle = "#000";
+				ctx.lineWidth = 1;
+				ctx.beginPath();
+				ctx.arc(cx, cy, layout.cell * 0.38, 0, Math.PI * 2);
+				ctx.fill();
+				ctx.stroke();
+				ctx.fillStyle = piece.side === ATT ? "#111" : "#111";
+				ctx.fillText(piece.type === "K" ? "K" : (piece.side === ATT ? "A" : "D"), cx, cy + layout.cell * 0.05);
+			}
+		}
+
+		const ui = uiLayer.getContext("2d");
+		ui.clearRect(0, 0, layout.width, layout.height);
+		if (state.selected) {
+			drawCellOutline(ui, state.selected.x, state.selected.y, "#ffb74d", 3);
+			state.legal.forEach(m => drawCellOutline(ui, m.x, m.y, "#ffd166", 2));
+		}
+		if (state.lastMove) {
+			drawCellOutline(ui, state.lastMove.from.x, state.lastMove.from.y, "#64b5f6", 2);
+			drawCellOutline(ui, state.lastMove.to.x, state.lastMove.to.y, "#64b5f6", 2);
+		}
+		drawCursor(ui);
+		drawUI(ui);
+	}
+
+	function drawCellOutline(ctx, x, y, color, w) {
+		ctx.strokeStyle = color;
+		ctx.lineWidth = w;
+		ctx.strokeRect(layout.offsetX + x * layout.cell + 2, layout.offsetY + y * layout.cell + 2, layout.cell - 4, layout.cell - 4);
+	}
+
+	function drawCursor(ctx) {
+		const { x, y } = state.cursor;
+		ctx.strokeStyle = "#ffb74d";
+		ctx.lineWidth = 2;
+		ctx.strokeRect(layout.offsetX + x * layout.cell + 3, layout.offsetY + y * layout.cell + 3, layout.cell - 6, layout.cell - 6);
+	}
+
+	function drawUI(ctx) {
+		if (state.gameOver) {
+			ctx.fillStyle = "rgba(0,0,0,0.7)";
+			ctx.fillRect(14, 14, 320, 52);
+			ctx.fillStyle = "#fff";
+			ctx.font = "16px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+			ctx.fillText(`Winner: ${state.winner}`, 24, 45);
+		}
+	}
+
+	function onBoard(x, y) { return x >= 0 && x < SIZE && y >= 0 && y < SIZE; }
+
+	function genMovesFor(x, y, board) {
+		const piece = board[y][x];
+		if (!piece) return [];
+		const moves = [];
+		const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+		for (const [dx, dy] of dirs) {
+			let nx = x + dx;
+			let ny = y + dy;
+			while (onBoard(nx, ny)) {
+				if (specialBlocked(nx, ny, piece)) break;
+				if (board[ny][nx]) break;
+				moves.push({ x: nx, y: ny });
+				nx += dx;
+				ny += dy;
+			}
+		}
+		return moves;
+	}
+
+	function hostileSquare(x, y, forKingCapture = false) {
+		if (isThrone(x, y) || isCorner(x, y)) return true;
+		if (!forKingCapture) return false;
+		return false;
+	}
+
+	function captureAround(x, y) {
+		const piece = state.board[y][x];
+		const enemySide = piece.side === ATT ? DEF : ATT;
+		const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+		for (const [dx, dy] of dirs) {
+			const ex = x + dx;
+			const ey = y + dy;
+			if (!onBoard(ex, ey)) continue;
+			const enemy = state.board[ey][ex];
+			if (!enemy || enemy.side !== enemySide) continue;
+			const bx = ex + dx;
+			const by = ey + dy;
+			const support = onBoard(bx, by) ? state.board[by][bx] : null;
+			const blockerHostile = hostileSquare(bx, by);
+			if (enemy.type === "K") {
+				// king needs full surround
+				if (kingCaptured(ex, ey)) {
+					state.board[ey][ex] = null;
+					state.captures[piece.side] += 50;
+					state.gameOver = true;
+					state.winner = "Attackers";
+					state.message = "King captured";
+				}
+				continue;
+			}
+			const sandwich = (support && support.side === piece.side) || blockerHostile;
+			if (sandwich) {
+				state.board[ey][ex] = null;
+				state.captures[piece.side] += 1;
+			}
+		}
+	}
+
+	function kingCaptured(kx, ky) {
+		const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+		for (const [dx, dy] of dirs) {
+			const nx = kx + dx;
+			const ny = ky + dy;
+			if (!onBoard(nx, ny)) return false;
+			const cell = state.board[ny][nx];
+			const blocked = (cell && cell.side === ATT) || hostileSquare(nx, ny, true);
+			if (!blocked) return false;
+		}
+		return true;
+	}
+
+	function makeMove(fx, fy, tx, ty) {
+		const piece = state.board[fy][fx];
+		const target = state.board[ty][tx];
+		const move = { from: { x: fx, y: fy }, to: { x: tx, y: ty }, piece: { ...piece }, captured: target ? { ...target } : null };
+
+		state.board[fy][fx] = null;
+		state.board[ty][tx] = piece;
+
+		if (piece.type === "K" && isCorner(tx, ty)) {
+			state.gameOver = true;
+			state.winner = "Defenders";
+			state.message = "King escaped";
+		}
+
+		captureAround(tx, ty);
+
+		state.moveHistory.push(move);
+		state.lastMove = move;
+
+		if (!state.gameOver) {
+			state.turn = state.turn === ATT ? DEF : ATT;
+			state.message = "";
+		}
+		updateHud();
+	}
+
+	function undo() {
+		const mv = state.moveHistory.pop();
+		if (!mv) return;
+		state.board[mv.from.y][mv.from.x] = { ...mv.piece };
+		state.board[mv.to.y][mv.to.x] = mv.captured ? { ...mv.captured } : null;
+		state.turn = mv.piece.side;
+		state.lastMove = state.moveHistory[state.moveHistory.length - 1] || null;
+		state.gameOver = false;
+		state.winner = null;
+		state.message = "";
+		updateHud();
+	}
+
+	function listMovesForSide(side) {
+		const moves = [];
+		for (let y = 0; y < SIZE; y++) {
+			for (let x = 0; x < SIZE; x++) {
+				const pc = state.board[y][x];
+				if (!pc || pc.side !== side) continue;
+				const legal = genMovesFor(x, y, state.board);
+				for (const m of legal) moves.push({ from: { x, y }, to: m, piece: pc });
+			}
+		}
+		return moves;
+	}
+
+	function aiChooseMove() {
+		const moves = listMovesForSide(state.aiColor);
+		if (!moves.length) return null;
+		if (state.aiLevel === "easy") return moves[Math.floor(Math.random() * moves.length)];
+
+		let bestScore = -Infinity;
+		const scored = [];
+		for (const mv of moves) {
+			const target = state.board[mv.to.y][mv.to.x];
+			const cap = target ? 1 : 0;
+			let score = cap + Math.random() * 0.05;
+			if (state.aiLevel === "hard") score += cap * 2 + (mv.piece.type === "K" ? 2 : 0);
+			bestScore = Math.max(bestScore, score);
+			scored.push({ mv, score });
+		}
+		const bestMoves = scored.filter(s => s.score >= bestScore - 0.001).map(s => s.mv);
+		return bestMoves[Math.floor(Math.random() * bestMoves.length)];
+	}
+
+	function maybeRunAI() {
+		if (!state.aiEnabled) return;
+		if (state.menuActive) return;
+		if (state.gameOver) return;
+		if (state.turn !== state.aiColor) return;
+		if (state.thinking) return;
+		state.thinking = true;
+		setTimeout(() => {
+			const mv = aiChooseMove();
+			if (mv) makeMove(mv.from.x, mv.from.y, mv.to.x, mv.to.y);
+			state.thinking = false;
+			render();
+			updateHud();
+			maybeRunAI();
+		}, 140);
+	}
+
+	function toggleRules(force) {
+		const show = force !== undefined ? force : !rulesOverlay.classList.contains("show");
+		rulesOverlay.classList.toggle("show", show);
+	}
+
+	function toggleHistory(force) {
+		const show = force !== undefined ? force : !historyPanel.classList.contains("show");
+		historyPanel.classList.toggle("show", show);
+	}
+
+	function showStartOverlay() {
+		startOverlay.style.display = "flex";
+		state.menuActive = true;
+	}
+
+	function updateHud() {
+		turnText.textContent = `Turn: ${state.turn === ATT ? "ATTACKERS" : "DEFENDERS"}`;
+		aiText.textContent = state.aiEnabled ? `AI: ${state.aiLevel.toUpperCase()} (${state.aiColor === ATT ? "ATT" : "DEF"})` : "AI: OFF";
+		if (state.gameOver && state.winner) msgText.textContent = `${state.winner} win`;
+		else msgText.textContent = state.message || "Ready";
+		capText.textContent = `Captures Att:${state.captures[ATT]} Def:${state.captures[DEF]}`;
+		if (state.lastMove) {
+			const { from, to } = state.lastMove;
+			lastMoveText.textContent = `Last: ${sq(from.x, from.y)}->${sq(to.x, to.y)}`;
+		} else {
+			lastMoveText.textContent = "Last: --";
+		}
+		renderHistory();
+	}
+
+	function sq(x, y) { return `${String.fromCharCode(97 + x)}${SIZE - y}`; }
+
+	function renderHistory() {
+		moveList.innerHTML = state.moveHistory.map((mv, i) => {
+			const capMark = mv.captured ? "x" : "-";
+			return `<div class="move-line">${i + 1}. ${sq(mv.from.x, mv.from.y)}${capMark}${sq(mv.to.x, mv.to.y)}</div>`;
+		}).join("");
+	}
+
+	function moveCursor(dx, dy) {
+		if (state.menuActive) return;
+		state.cursor.x = Math.max(0, Math.min(SIZE - 1, state.cursor.x + dx));
+		state.cursor.y = Math.max(0, Math.min(SIZE - 1, state.cursor.y + dy));
+		state.message = "";
+		render();
+		updateHud();
+	}
+
+	function clickCell(x, y) {
+		const piece = state.board[y][x];
+		if (state.selected) {
+			const isLegal = state.legal.some(m => m.x === x && m.y === y);
+			if (isLegal) {
+				makeMove(state.selected.x, state.selected.y, x, y);
+				state.selected = null;
+				state.legal = [];
+				return;
+			}
+		}
+		if (piece && piece.side === state.turn) {
+			state.selected = { x, y };
+			state.legal = genMovesFor(x, y, state.board);
+			state.cursor = { x, y };
+			state.message = "";
+		} else {
+			state.selected = null;
+			state.legal = [];
+		}
+		updateHud();
+	}
+
+	function handlePointer(e) {
+		if (state.menuActive) return;
+		const mx = e.offsetX;
+		const my = e.offsetY;
+		const x = Math.floor((mx - layout.offsetX) / layout.cell);
+		const y = Math.floor((my - layout.offsetY) / layout.cell);
+		if (!onBoard(x, y)) return;
+		state.cursor = { x, y };
+		clickCell(x, y);
+		render();
+		maybeRunAI();
+		updateHud();
+	}
+
+	function handleKey(e) {
+		const key = e.key.toLowerCase();
+		if (rulesOverlay.classList.contains("show")) {
+			if (["h","escape","enter"," "].includes(key)) toggleRules(false);
+			return;
+		}
+		if (state.menuActive) {
+			if (key === "1") { selectedMode = "1p"; applyModeUI(); }
+			else if (key === "2") { selectedMode = "2p"; applyModeUI(); }
+			else if (key === "arrowup" || key === "w") { cycleDiff(-1); }
+			else if (key === "arrowdown" || key === "s") { cycleDiff(1); }
+			else if (key === "enter" || key === " ") { startSelected(); }
+			return;
+		}
+		if (key === "arrowup") moveCursor(0, -1);
+		else if (key === "arrowdown") moveCursor(0, 1);
+		else if (key === "arrowleft") moveCursor(-1, 0);
+		else if (key === "arrowright") moveCursor(1, 0);
+		else if (key === "enter" || key === " ") { clickCell(state.cursor.x, state.cursor.y); maybeRunAI(); }
+		else if (key === "escape" || key === "b") { state.selected = null; state.legal = []; state.message = ""; }
+		else if (key === "u") { undo(); }
+		else if (key === "r") { resetBoard(); }
+		else if (key === "h") { toggleRules(); }
+		else if (key === "v") { state.aiEnabled = !state.aiEnabled; state.message = state.aiEnabled ? "AI enabled" : "AI disabled"; }
+		render(); updateHud();
+	}
+
+	function start1P() {
+		state.aiEnabled = true;
+		state.aiColor = ATT;
+		state.menuActive = false;
+		startOverlay.style.display = "none";
+		resetBoard();
+		applyDifficultyUI();
+		render();
+		updateHud();
+		maybeRunAI();
+	}
+
+	function start2P() {
+		state.aiEnabled = false;
+		state.menuActive = false;
+		startOverlay.style.display = "none";
+		resetBoard();
+		applyDifficultyUI();
+		render();
+		updateHud();
+	}
+
+	function startSelected() {
+		state.aiLevel = selectedDiff;
+		if (selectedMode === "1p") start1P(); else start2P();
+	}
+
+	function setDifficulty(level) {
+		state.aiLevel = level;
+		selectedDiff = level;
+		applyDifficultyUI();
+		updateHud();
+	}
+
+	function applyModeUI() {
+		[btn1p, btn2p].forEach(b => b.classList.remove("active"));
+		if (selectedMode === "1p") btn1p.classList.add("active"); else btn2p.classList.add("active");
+	}
+
+	function applyDifficultyUI() {
+		[btnEasy, btnMed, btnHard].forEach(b => b.classList.remove("active"));
+		if (state.aiLevel === "easy") btnEasy.classList.add("active");
+		else if (state.aiLevel === "hard") btnHard.classList.add("active");
+		else btnMed.classList.add("active");
+		selectedDiff = state.aiLevel;
+	}
+
+	function cycleDiff(delta) {
+		const diffs = ["easy", "medium", "hard"];
+		const idx = diffs.indexOf(selectedDiff);
+		selectedDiff = diffs[(idx + delta + diffs.length) % diffs.length];
+		state.aiLevel = selectedDiff;
+		applyDifficultyUI();
+	}
+
+	function render() {
+		drawBoard(boardLayer.getContext("2d"));
+		drawPieces(piecesLayer.getContext("2d"));
+	}
+
+	resetBoard();
+	resize();
+	applyDifficultyUI();
+	applyModeUI();
+	render();
+	updateHud();
+
+	uiLayer.addEventListener("mousedown", handlePointer);
+	window.addEventListener("keydown", handleKey);
+	window.addEventListener("resize", () => { resize(); render(); });
+	btn1p.addEventListener("click", () => { selectedMode = "1p"; applyModeUI(); });
+	btn2p.addEventListener("click", () => { selectedMode = "2p"; applyModeUI(); });
+	btnEasy.addEventListener("click", () => { setDifficulty("easy"); });
+	btnMed.addEventListener("click", () => { setDifficulty("medium"); });
+	btnHard.addEventListener("click", () => { setDifficulty("hard"); });
+	btnStartOverlay.addEventListener("click", startSelected);
+	btnRules.addEventListener("click", () => toggleRules(true));
+	closeRules.addEventListener("click", () => toggleRules(false));
+	hudBtnStart.addEventListener("click", showStartOverlay);
+	hudBtnReset.addEventListener("click", () => { resetBoard(); render(); updateHud(); });
+	hudBtnUndo.addEventListener("click", () => { undo(); render(); updateHud(); });
+	hudBtnHistory.addEventListener("click", () => toggleHistory());
+	btnHistoryClose.addEventListener("click", () => toggleHistory(false));
+
+})();
+</script>
+</body>
+</html>

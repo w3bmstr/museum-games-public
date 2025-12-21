@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <!DOCTYPE html>
+  <html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shatranj</title>
+    <style>
+      html, body { margin:0; padding:0; width:100%; height:100%; background:#0b0d12; color:#e8ebf2; font-family:"Segoe UI", system-ui, sans-serif; overflow:hidden; }
+      #game-container { position:relative; width:100vw; height:100vh; overflow:hidden; background: radial-gradient(circle at 18% 18%, rgba(251,191,36,0.08), transparent 45%), radial-gradient(circle at 80% 70%, rgba(59,130,246,0.08), transparent 45%), #0b0d12; }
+      canvas { position:absolute; inset:0; width:100%; height:100%; display:block; }
+      .layer-board { z-index:0; pointer-events:none; }
+      .layer-pieces { z-index:1; pointer-events:none; }
+      #hud { position:absolute; top:10px; left:10px; z-index:5; display:flex; flex-direction:column; gap:8px; }
+      .panel { background:rgba(0,0,0,0.58); border:1px solid #1f2430; border-radius:10px; padding:10px 12px; min-width:240px; box-shadow:0 10px 28px rgba(0,0,0,0.35); }
+      .panel h4 { margin:0 0 6px 0; font-size:13px; letter-spacing:0.5px; color:#ffc857; }
+      .panel p { margin:4px 0; font-size:13px; }
+      #controls { display:flex; gap:8px; flex-wrap:wrap; }
+      #controls button { padding:8px 10px; border:none; border-radius:8px; background:#252a38; color:#e8e8ec; cursor:pointer; font-size:13px; }
+      #controls button.primary { background:linear-gradient(135deg, #fbbf24, #f59e0b); color:#0b0d12; }
+      #controls button:disabled { opacity:0.55; cursor:not-allowed; }
+      .history-panel { position:relative; max-height:260px; overflow-y:auto; font-family:monospace; font-size:12px; }
+      .history-panel .move-line { margin:2px 0; }
+      .history-close { position:absolute; top:6px; right:6px; padding:4px 8px; border:none; border-radius:6px; background:#252a38; color:#e8e8ec; cursor:pointer; font-size:11px; }
+      #btn-history { display:none; }
+      @media (max-width:720px) {
+        #hud { position:fixed; top:auto; bottom:0; left:0; right:0; flex-direction:row; gap:6px; padding:6px; background:linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.45) 40%); backdrop-filter:blur(8px); }
+        #hud .panel { min-width:0; flex:1; }
+        #history { display:none; position:fixed; right:8px; bottom:78px; width:82vw; max-width:380px; max-height:55vh; z-index:12; background:rgba(0,0,0,0.85); border-radius:10px; }
+        #history.show { display:block; }
+        #btn-history { display:inline-block; }
+      }
+      #start-overlay { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.72); z-index:10; }
+      #start-card { background:#161820; border:1px solid #262c3a; border-radius:12px; padding:18px 22px; color:#f5f5f5; min-width:280px; box-shadow:0 12px 30px rgba(0,0,0,0.35); }
+      #start-card h2 { margin:0 0 10px 0; font-size:20px; }
+      #start-card p { margin:0 0 12px 0; font-size:14px; color:#cfd3dd; }
+      #start-card .btn-row { display:flex; gap:10px; margin-top:10px; }
+      #start-card button { flex:1; padding:10px 12px; border:none; border-radius:8px; background:linear-gradient(135deg, #fbbf24, #f59e0b); color:#0b0d12; font-weight:700; cursor:pointer; }
+      #start-card button.secondary { background:#3a3f4f; color:#f5f5f5; }
+      #start-card button.active { outline:2px solid #fff; }
+      #rules-overlay { position:absolute; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,0.7); z-index:11; }
+      #rules-overlay.show { display:flex; }
+      #rules-card { background:#161820; border:1px solid #262c3a; border-radius:12px; padding:18px 22px; color:#f5f5f5; max-width:760px; width:90%; box-shadow:0 12px 30px rgba(0,0,0,0.35); line-height:1.45; }
+      #rules-card h3 { margin:0 0 8px 0; font-size:18px; }
+      #rules-card ul { margin:8px 0 0 18px; padding:0; }
+      #rules-card li { margin:4px 0; }
+      #close-rules { margin-top:12px; padding:8px 12px; border:none; border-radius:8px; background:#3a3f4f; color:#fff; cursor:pointer; }
+    </style>
+  </head>
+  <body>
+  <div id="game-container">
+    <div id="hud">
+      <div class="panel">
+        <h4>Status</h4>
+        <p id="turn-text">Turn: --</p>
+        <p id="ai-text">AI: --</p>
+        <p id="msg-text">Ready</p>
+        <p id="lastmove-text">Last: --</p>
+      </div>
+      <div id="controls" class="panel">
+        <button id="btn-start" class="primary">New Game</button>
+        <button id="btn-reset">Reset</button>
+        <button id="btn-undo">Undo</button>
+        <button id="btn-history">History</button>
+        <button id="btn-rules">Rules</button>
+      </div>
+      <div id="history" class="panel history-panel">
+        <h4>Moves</h4>
+        <button id="btn-history-close" class="history-close">Close</button>
+        <div id="move-list"></div>
+      </div>
+    </div>
+
+    <div id="start-overlay">
+      <div id="start-card">
+        <h2>Shatranj</h2>
+        <p>Classical Persian chess: no castling, no double-step pawns, promotion to firzan (advisor), stalemate counts as a win for the player delivering it.</p>
+        <div class="btn-row">
+          <button id="btn-1p">1 Player (vs AI)</button>
+          <button id="btn-2p" class="secondary">2 Players</button>
+        </div>
+        <p style="margin-top:12px; margin-bottom:6px;">AI Difficulty</p>
+        <div class="btn-row">
+          <button id="btn-easy" class="secondary">Easy</button>
+          <button id="btn-med" class="active">Medium</button>
+          <button id="btn-hard" class="secondary">Hard</button>
+        </div>
+        <p style="margin-top:12px; margin-bottom:6px;">Start</p>
+        <div class="btn-row" style="margin-top:8px;">
+          <button id="btn-start-overlay" class="primary">Start Game</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="rules-overlay">
+      <div id="rules-card">
+        <h3>Rules</h3>
+        <ul>
+          <li>Board: 8×8. Setup (White a1→h1): R N A F K F A N R. Pawns on rank 2; Black mirrors.</li>
+          <li>Moves: K (1 any direction); F/Firzan (1 diagonal); R (rook); N (knight); A/Alfil (leap exactly 2 diagonally, can jump pieces); P (one step forward, capture one step diagonal).</li>
+          <li>No castling. No double-step pawns. No en passant.</li>
+          <li>Promotion: pawns promote only to Firzan on the last rank.</li>
+          <li>Stalemate: the side that is stalemated loses (win for the player delivering it).</li>
+          <li>Win: checkmate or stalemating the opponent.</li>
+          <li>Controls: click squares; U undo; R reset; H rules.</li>
+        </ul>
+        <button id="close-rules">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  (() => {
+    const ROWS = 8, COLS = 8;
+    const WHITE = 1, BLACK = 2;
+    const dpr = window.devicePixelRatio || 1;
+
+    const PIECE_VALUES = { K: 10000, F: 250, R: 500, N: 320, A: 250, P: 100 };
+    const GLYPH = {
+      [WHITE]: { K:'♔', F:'♕', R:'♖', N:'♘', A:'♗', P:'♙' },
+      [BLACK]: { K:'♚', F:'♛', R:'♜', N:'♞', A:'♝', P:'♟' }
+    };
+
+    const container = document.getElementById('game-container');
+    const startOverlay = document.getElementById('start-overlay');
+    const btn1p = document.getElementById('btn-1p');
+    const btn2p = document.getElementById('btn-2p');
+    const btnEasy = document.getElementById('btn-easy');
+    const btnMed = document.getElementById('btn-med');
+    const btnHard = document.getElementById('btn-hard');
+    const btnStartOverlay = document.getElementById('btn-start-overlay');
+    const btnRules = document.getElementById('btn-rules');
+    const rulesOverlay = document.getElementById('rules-overlay');
+    const closeRules = document.getElementById('close-rules');
+    const hudBtnStart = document.getElementById('btn-start');
+    const hudBtnReset = document.getElementById('btn-reset');
+    const hudBtnUndo = document.getElementById('btn-undo');
+    const hudBtnHistory = document.getElementById('btn-history');
+    const btnHistoryClose = document.getElementById('btn-history-close');
+    const historyPanel = document.getElementById('history');
+    const turnText = document.getElementById('turn-text');
+    const aiText = document.getElementById('ai-text');
+    const msgText = document.getElementById('msg-text');
+    const lastMoveText = document.getElementById('lastmove-text');
+    const moveList = document.getElementById('move-list');
+
+    const boardLayer = document.createElement('canvas');
+    const piecesLayer = document.createElement('canvas');
+    boardLayer.className = 'layer-board';
+    piecesLayer.className = 'layer-pieces';
+    container.appendChild(boardLayer);
+    container.appendChild(piecesLayer);
+
+    const layout = { width:0, height:0, cell:0, offsetX:0, offsetY:0 };
+
+    const state = {
+      board: [],
+      turn: WHITE,
+      vsAI: true,
+      aiColor: BLACK,
+      aiDepth: 2,
+      gameOver: false,
+      history: [],
+      lastMove: null,
+      lastMoveHighlight: null,
+      selected: null,
+      moves: [],
+      undoStack: []
+    };
+
+    function makePiece(c,t){ return { c, t }; }
+
+    function setupBoard() {
+      state.board = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+      const back = ['R','N','A','F','K','F','A','N','R'];
+      for (let c = 0; c < COLS; c++) {
+        state.board[7][c] = makePiece(WHITE, back[c]);
+        state.board[6][c] = makePiece(WHITE, 'P');
+        state.board[0][c] = makePiece(BLACK, back[c]);
+        state.board[1][c] = makePiece(BLACK, 'P');
+      }
+    }
+
+    function resetGame() {
+      setupBoard();
+      state.turn = WHITE;
+      state.gameOver = false;
+      state.history = [];
+      state.lastMove = null;
+      state.lastMoveHighlight = null;
+      state.selected = null;
+      state.moves = [];
+      state.undoStack = [];
+      msgText.textContent = 'Game on';
+      updateHud();
+      resizeAndRedraw();
+      maybeAIMove();
+    }
+
+    function cloneBoard(b=state.board){ return b.map(row => row.map(p => p ? { ...p } : null)); }
+
+    function applyMove(b, mv) {
+      const { fr, fc, tr, tc, promo } = mv;
+      b[tr][tc] = { ...b[fr][fc] };
+      b[fr][fc] = null;
+      if (promo) b[tr][tc].t = promo;
+    }
+
+    function kingPos(b, color) {
+      for (let r=0;r<ROWS;r++) for (let c=0;c<COLS;c++) {
+        const p = b[r][c];
+        if (p && p.c === color && p.t === 'K') return { r, c };
+      }
+      return null;
+    }
+
+    function inBounds(r,c){ return r>=0 && r<ROWS && c>=0 && c<COLS; }
+
+    function pseudoMoves(b, color) {
+      const moves = [];
+      const dir = color === WHITE ? -1 : 1;
+      for (let r=0;r<ROWS;r++) for (let c=0;c<COLS;c++) {
+        const p = b[r][c];
+        if (!p || p.c !== color) continue;
+        if (p.t === 'P') {
+          const fr = r + dir;
+          if (inBounds(fr,c) && !b[fr][c]) moves.push({fr:r,fc:c,tr:fr,tc:c,promo: (color===WHITE && fr===0) || (color===BLACK && fr===ROWS-1) ? 'F' : null});
+          for (const dc of [-1,1]) {
+            const rr = r + dir, cc = c + dc;
+            if (!inBounds(rr,cc)) continue;
+            const t = b[rr][cc];
+            if (t && t.c !== color) moves.push({fr:r,fc:c,tr:rr,tc:cc,promo: (color===WHITE && rr===0) || (color===BLACK && rr===ROWS-1) ? 'F' : null});
+          }
+        } else if (p.t === 'N') {
+          const deltas = [[2,1],[1,2],[-1,2],[-2,1],[-2,-1],[-1,-2],[1,-2],[2,-1]];
+          for (const [dr,dc] of deltas) {
+            const nr=r+dr,nc=c+dc; if(!inBounds(nr,nc)) continue;
+            const t=b[nr][nc]; if(!t || t.c!==color) moves.push({fr:r,fc:c,tr:nr,tc:nc,promo:null});
+          }
+        } else if (p.t === 'A') {
+          const leaps = [[2,2],[2,-2],[-2,2],[-2,-2]];
+          for (const [dr,dc] of leaps) {
+            const nr=r+dr,nc=c+dc; if(!inBounds(nr,nc)) continue;
+            const t=b[nr][nc]; if(!t || t.c!==color) moves.push({fr:r,fc:c,tr:nr,tc:nc,promo:null});
+          }
+        } else if (p.t === 'F') {
+          const diag = [[1,1],[1,-1],[-1,1],[-1,-1]];
+          for (const [dr,dc] of diag) {
+            const nr=r+dr,nc=c+dc; if(!inBounds(nr,nc)) continue;
+            const t=b[nr][nc]; if(!t || t.c!==color) moves.push({fr:r,fc:c,tr:nr,tc:nc,promo:null});
+          }
+        } else if (p.t === 'R') {
+          const dirs=[[1,0],[-1,0],[0,1],[0,-1]];
+          for (const [dr,dc] of dirs){
+            let nr=r+dr,nc=c+dc;
+            while(inBounds(nr,nc)){
+              const t=b[nr][nc];
+              if(!t) moves.push({fr:r,fc:c,tr:nr,tc:nc,promo:null});
+              else { if(t.c!==color) moves.push({fr:r,fc:c,tr:nr,tc:nc,promo:null}); break; }
+              nr+=dr; nc+=dc;
+            }
+          }
+        } else if (p.t === 'K') {
+          for (let dr=-1; dr<=1; dr++) for (let dc=-1; dc<=1; dc++) {
+            if (dr===0 && dc===0) continue;
+            const nr=r+dr,nc=c+dc; if(!inBounds(nr,nc)) continue;
+            const t=b[nr][nc]; if(!t || t.c!==color) moves.push({fr:r,fc:c,tr:nr,tc:nc,promo:null});
+          }
+        }
+      }
+      return moves;
+    }
+
+    function isCheck(b, color) {
+      const enemy = color === WHITE ? BLACK : WHITE;
+      const enemyMoves = pseudoMoves(b, enemy);
+      const k = kingPos(b, color);
+      if (!k) return true;
+      return enemyMoves.some(m => m.tr === k.r && m.tc === k.c);
+    }
+
+    function legalMoves(b, color) {
+      const pse = pseudoMoves(b, color);
+      const legal = [];
+      for (const mv of pse) {
+        const nb = cloneBoard(b);
+        applyMove(nb, mv);
+        if (!isCheck(nb, color)) legal.push(mv);
+      }
+      return legal;
+    }
+
+    function evaluate(b) {
+      let score = 0;
+      for (let r=0;r<ROWS;r++) for (let c=0;c<COLS;c++) {
+        const p = b[r][c]; if(!p) continue;
+        score += (p.c===WHITE?1:-1) * PIECE_VALUES[p.t];
+      }
+      return score;
+    }
+
+    function minimax(b, depth, alpha, beta, maximizing) {
+      if (depth === 0) return { score: evaluate(b) + (Math.random()-0.5)*5 };
+      const color = maximizing ? WHITE : BLACK;
+      const moves = legalMoves(b, color);
+      if (!moves.length) {
+        const inChk = isCheck(b, color);
+        if (inChk) return { score: maximizing ? -99999 : 99999 };
+        return { score: maximizing ? -80000 : 80000 };
+      }
+      let bestMove = null;
+      if (maximizing) {
+        let best = -Infinity;
+        for (const mv of moves) {
+          const nb = cloneBoard(b);
+          applyMove(nb, mv);
+          const res = minimax(nb, depth-1, alpha, beta, false);
+          if (res.score > best) { best = res.score; bestMove = mv; }
+          alpha = Math.max(alpha, res.score);
+          if (beta <= alpha) break;
+        }
+        return { score: best, move: bestMove };
+      } else {
+        let best = Infinity;
+        for (const mv of moves) {
+          const nb = cloneBoard(b);
+          applyMove(nb, mv);
+          const res = minimax(nb, depth-1, alpha, beta, true);
+          if (res.score < best) { best = res.score; bestMove = mv; }
+          beta = Math.min(beta, res.score);
+          if (beta <= alpha) break;
+        }
+        return { score: best, move: bestMove };
+      }
+    }
+
+    function updateHud() {
+      turnText.textContent = `Turn: ${state.turn === WHITE ? 'White' : 'Black'}`;
+      aiText.textContent = state.vsAI ? `AI: ${state.aiColor === WHITE ? 'White' : 'Black'} depth ${state.aiDepth}` : 'AI: Off';
+      lastMoveText.textContent = state.lastMove ? `Last: ${state.lastMove}` : 'Last: --';
+    }
+
+    function pushHistory(statusText) {
+      moveList.innerHTML = '';
+      state.history.forEach((m, i) => {
+        const div = document.createElement('div');
+        div.className = 'move-line';
+        div.textContent = `${i+1}. ${m}`;
+        moveList.appendChild(div);
+      });
+      msgText.textContent = statusText;
+    }
+
+    function coordsFromEvent(evt) {
+      const rect = container.getBoundingClientRect();
+      const x = (evt.clientX - rect.left) * dpr;
+      const y = (evt.clientY - rect.top) * dpr;
+      const col = Math.floor((x - layout.offsetX*dpr) / (layout.cell*dpr));
+      const row = Math.floor((y - layout.offsetY*dpr) / (layout.cell*dpr));
+      return { row, col };
+    }
+
+    function handleClick(evt) {
+      if (state.gameOver || startOverlay.style.display !== 'none') return;
+      const { row, col } = coordsFromEvent(evt);
+      if (!inBounds(row,col)) return;
+      const piece = state.board[row][col];
+      if (state.selected) {
+        const mv = state.moves.find(m => m.tr===row && m.tc===col);
+        if (mv) { makeMove(mv); return; }
+        state.selected = null; state.moves = []; redrawPieces(); return;
+      }
+      if (piece && piece.c === state.turn && (!state.vsAI || piece.c !== state.aiColor)) {
+        state.selected = { r:row, c:col };
+        state.moves = legalMoves(state.board, state.turn).filter(m => m.fr===row && m.fc===col);
+      } else {
+        state.selected = null; state.moves = [];
+      }
+      redrawPieces();
+    }
+
+    function makeMove(mv) {
+      state.undoStack.push({
+        board: cloneBoard(state.board),
+        turn: state.turn,
+        history: [...state.history],
+        lastMove: state.lastMove,
+        lastMoveHighlight: state.lastMoveHighlight,
+        gameOver: state.gameOver
+      });
+
+      applyMove(state.board, mv);
+      state.lastMoveHighlight = mv;
+      const moveStr = `${fileChar(mv.fc)}${8-mv.fr}→${fileChar(mv.tc)}${8-mv.tr}${mv.promo ? '=' + mv.promo : ''}`;
+      state.history.push(moveStr);
+      state.lastMove = moveStr;
+
+      state.turn = state.turn === WHITE ? BLACK : WHITE;
+      state.selected = null;
+      state.moves = [];
+
+      const opp = state.turn;
+      const oppMoves = legalMoves(state.board, opp);
+      if (!oppMoves.length) {
+        const inChk = isCheck(state.board, opp);
+        state.gameOver = true;
+        if (inChk) msgText.textContent = 'Checkmate';
+        else msgText.textContent = 'Stalemate (attacker wins)';
+      } else {
+        msgText.textContent = isCheck(state.board, opp) ? 'Check' : 'Game on';
+      }
+      updateHud();
+      redrawAll();
+      maybeAIMove();
+    }
+
+    function fileChar(c){ return String.fromCharCode('a'.charCodeAt(0)+c); }
+
+    function undo() {
+      if (!state.undoStack.length) return;
+      const snap = state.undoStack.pop();
+      state.board = snap.board;
+      state.turn = snap.turn;
+      state.history = snap.history;
+      state.lastMove = snap.lastMove;
+      state.lastMoveHighlight = snap.lastMoveHighlight;
+      state.gameOver = snap.gameOver;
+      state.selected = null;
+      state.moves = [];
+      msgText.textContent = 'Undo';
+      redrawAll();
+      updateHud();
+    }
+
+    function aiMove() {
+      if (!state.vsAI || state.turn !== state.aiColor || state.gameOver) return;
+      const depth = state.aiDepth;
+      const maximizing = state.aiColor === WHITE;
+      const res = minimax(state.board, depth, -Infinity, Infinity, maximizing);
+      if (res.move) makeMove(res.move);
+    }
+
+    function maybeAIMove() {
+      if (state.vsAI && state.turn === state.aiColor && !state.gameOver) {
+        setTimeout(aiMove, 120);
+      }
+    }
+
+    function resize() {
+      layout.width = container.clientWidth;
+      layout.height = container.clientHeight;
+      const size = Math.min(layout.width, layout.height) * 0.9;
+      layout.cell = size / COLS;
+      layout.offsetX = (layout.width - size) / 2;
+      layout.offsetY = (layout.height - size) / 2;
+      [boardLayer, piecesLayer].forEach(layer => {
+        layer.width = layout.width * dpr;
+        layer.height = layout.height * dpr;
+        layer.style.width = layout.width + 'px';
+        layer.style.height = layout.height + 'px';
+        const ctx = layer.getContext('2d');
+        ctx.setTransform(dpr,0,0,dpr,0,0);
+      });
+    }
+
+    function drawBoard() {
+      const ctx = boardLayer.getContext('2d');
+      ctx.clearRect(0,0,layout.width, layout.height);
+      for (let r=0;r<ROWS;r++) {
+        for (let c=0;c<COLS;c++) {
+          const light = (r+c)%2===0;
+          ctx.fillStyle = light ? '#f0d9b5' : '#b58863';
+          ctx.fillRect(layout.offsetX + c*layout.cell, layout.offsetY + r*layout.cell, layout.cell, layout.cell);
+        }
+      }
+      ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+      ctx.lineWidth = 1;
+      for (let i=0;i<=ROWS;i++) {
+        const x = layout.offsetX + i*layout.cell;
+        ctx.beginPath();
+        ctx.moveTo(layout.offsetX, layout.offsetY + i*layout.cell);
+        ctx.lineTo(layout.offsetX + layout.cell*COLS, layout.offsetY + i*layout.cell);
+        ctx.moveTo(x, layout.offsetY);
+        ctx.lineTo(x, layout.offsetY + layout.cell*ROWS);
+        ctx.stroke();
+      }
+      if (state.lastMoveHighlight) {
+        ctx.fillStyle = 'rgba(88,198,255,0.2)';
+        const { fr, fc, tr, tc } = state.lastMoveHighlight;
+        ctx.fillRect(layout.offsetX + fc*layout.cell, layout.offsetY + fr*layout.cell, layout.cell, layout.cell);
+        ctx.fillRect(layout.offsetX + tc*layout.cell, layout.offsetY + tr*layout.cell, layout.cell, layout.cell);
+      }
+    }
+
+    function redrawPieces() {
+      const ctx = piecesLayer.getContext('2d');
+      ctx.clearRect(0,0,layout.width, layout.height);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = `${layout.cell * 0.6}px "Segoe UI Symbol"`;
+      for (let r=0;r<ROWS;r++) for (let c=0;c<COLS;c++) {
+        const p = state.board[r][c]; if (!p) continue;
+        ctx.fillStyle = p.c === WHITE ? '#ffffff' : '#111111';
+        const glyph = GLYPH[p.c][p.t];
+        ctx.fillText(glyph, layout.offsetX + c*layout.cell + layout.cell/2, layout.offsetY + r*layout.cell + layout.cell/2 + 1);
+      }
+      if (state.selected) {
+        ctx.strokeStyle = 'rgba(249,115,22,0.9)';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(layout.offsetX + state.selected.c*layout.cell + 2, layout.offsetY + state.selected.r*layout.cell + 2, layout.cell-4, layout.cell-4);
+        ctx.fillStyle = 'rgba(249,115,22,0.3)';
+        for (const mv of state.moves) {
+          ctx.beginPath();
+          ctx.arc(layout.offsetX + mv.tc*layout.cell + layout.cell/2, layout.offsetY + mv.tr*layout.cell + layout.cell/2, layout.cell*0.18, 0, Math.PI*2);
+          ctx.fill();
+        }
+      }
+    }
+
+    function redrawAll() { drawBoard(); redrawPieces(); pushHistory(msgText.textContent); }
+    function resizeAndRedraw() { resize(); redrawAll(); }
+
+    function bindUI() {
+      container.addEventListener('click', handleClick);
+      window.addEventListener('resize', resizeAndRedraw);
+      window.addEventListener('keyup', e => {
+        if (e.key === 'u' || e.key === 'U') undo();
+        if (e.key === 'r' || e.key === 'R') resetGame();
+        if (e.key === 'h' || e.key === 'H') rulesOverlay.classList.add('show');
+      });
+
+      btn1p.addEventListener('click', () => { state.vsAI = true; state.aiColor = BLACK; toggleSelect(btn1p, btn2p); });
+      btn2p.addEventListener('click', () => { state.vsAI = false; toggleSelect(btn2p, btn1p); });
+      btnEasy.addEventListener('click', () => { state.aiDepth = 1; setDiff(btnEasy); });
+      btnMed.addEventListener('click', () => { state.aiDepth = 2; setDiff(btnMed); });
+      btnHard.addEventListener('click', () => { state.aiDepth = 3; setDiff(btnHard); });
+      btnStartOverlay.addEventListener('click', () => { startOverlay.style.display = 'none'; resetGame(); });
+
+      hudBtnStart.addEventListener('click', resetGame);
+      hudBtnReset.addEventListener('click', resetGame);
+      hudBtnUndo.addEventListener('click', undo);
+      btnRules.addEventListener('click', () => rulesOverlay.classList.add('show'));
+      closeRules.addEventListener('click', () => rulesOverlay.classList.remove('show'));
+
+      hudBtnHistory.addEventListener('click', () => historyPanel.classList.toggle('show'));
+      btnHistoryClose.addEventListener('click', () => historyPanel.classList.remove('show'));
+    }
+
+    function toggleSelect(on, off) { on.classList.remove('secondary'); off.classList.add('secondary'); }
+    function setDiff(btn) { [btnEasy, btnMed, btnHard].forEach(b => b.classList.remove('active')); btn.classList.add('active'); }
+
+    setupBoard();
+    resize();
+    redrawAll();
+    bindUI();
+  })();
+  </script>
+  </body>
+  </html>

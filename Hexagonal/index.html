@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Hexagonal Chess - Standalone</title>
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		width: 100%;
+		height: 100%;
+		background: #0f0f12;
+		overflow: hidden;
+		font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+		color: #eee;
+	}
+	#game-container {
+		position: relative;
+		width: 100vw;
+		height: 100vh;
+		overflow: hidden;
+		background: #0f0f12;
+	}
+	canvas {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		display: block;
+	}
+	.layer-board { z-index: 0; pointer-events: none; }
+	.layer-pieces { z-index: 1; pointer-events: none; }
+	.layer-ui { z-index: 2; }
+	#start-overlay {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: rgba(0,0,0,0.7);
+		z-index: 10;
+	}
+	#start-card {
+		background: #1d1d1f;
+		border: 1px solid #333;
+		border-radius: 12px;
+		padding: 18px 22px;
+		color: #f5f5f5;
+		min-width: 280px;
+		box-shadow: 0 12px 30px rgba(0,0,0,0.35);
+	}
+	#start-card h2 { margin: 0 0 10px 0; font-size: 20px; }
+	#start-card p { margin: 0 0 12px 0; font-size: 14px; color: #ccc; }
+	#start-card .btn-row { display: flex; gap: 10px; margin-top: 10px; }
+	#start-card button {
+		flex: 1;
+		padding: 10px 12px;
+		border: none;
+		border-radius: 8px;
+		background: linear-gradient(135deg, #ffb74d, #f57c00);
+		color: #fff;
+		font-weight: 700;
+		cursor: pointer;
+	}
+	#start-card button.secondary { background: #444; }
+	#start-card button.active { outline: 2px solid #fff; }
+	#hud {
+		position: absolute;
+		top: 10px;
+		left: 10px;
+		z-index: 5;
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+	.panel {
+		background: rgba(0,0,0,0.5);
+		border: 1px solid #333;
+		border-radius: 10px;
+		padding: 10px 12px;
+		min-width: 220px;
+		color: #eee;
+		box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+	}
+	.panel h4 { margin: 0 0 6px 0; font-size: 13px; letter-spacing: 0.5px; color: #ffd166; }
+	.panel p { margin: 4px 0; font-size: 13px; }
+	#controls { display: flex; gap: 8px; flex-wrap: wrap; }
+	#controls button { padding: 8px 10px; border: none; border-radius: 8px; background: #2d2d33; color: #eee; cursor: pointer; font-size: 13px; }
+	#controls button.primary { background: linear-gradient(135deg, #ffb74d, #f57c00); color: #fff; }
+	.history-panel { position: relative; max-height: 260px; overflow-y: auto; font-family: monospace; font-size: 12px; }
+	.history-panel .move-line { margin: 2px 0; }
+	.history-close { position: absolute; top: 6px; right: 6px; padding: 4px 8px; border: none; border-radius: 6px; background: #2d2d33; color: #eee; cursor: pointer; font-size: 11px; }
+	#btn-history { display: none; }
+	#rules-overlay {
+		position: absolute; inset: 0;
+		display: none; align-items: center; justify-content: center;
+		background: rgba(0,0,0,0.7); z-index: 11;
+	}
+	#rules-overlay.show { display: flex; }
+	#rules-card {
+		background: #1d1d1f; border: 1px solid #333; border-radius: 12px;
+		padding: 18px 22px; color: #f5f5f5; max-width: 640px; width: 90%;
+		box-shadow: 0 12px 30px rgba(0,0,0,0.35); line-height: 1.45;
+	}
+	#rules-card h3 { margin: 0 0 8px 0; font-size: 18px; }
+	#rules-card ul { margin: 8px 0 0 18px; padding: 0; }
+	#rules-card li { margin: 4px 0; }
+	#close-rules { margin-top: 12px; padding: 8px 12px; border: none; border-radius: 8px; background: #444; color: #fff; cursor: pointer; }
+
+	@media (max-width: 720px) {
+		#hud { position: fixed; top: auto; bottom: 0; left: 0; right: 0; flex-direction: row; gap: 6px; padding: 6px; background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.45) 40%); backdrop-filter: blur(8px); }
+		#hud .panel { min-width: 0; flex: 1; }
+		#history { display: none; position: fixed; right: 8px; bottom: 78px; width: 82vw; max-width: 380px; max-height: 55vh; z-index: 12; background: rgba(0,0,0,0.85); border-radius: 10px; }
+		#history.show { display: block; }
+		#btn-history { display: inline-block; }
+	}
+</style>
+</head>
+<body>
+<div id="game-container">
+	<div id="hud">
+		<div class="panel">
+			<h4>Status</h4>
+			<p id="turn-text">Turn: --</p>
+			<p id="ai-text">AI: --</p>
+			<p id="msg-text">Ready</p>
+			<p id="cap-text">Captures W:0 B:0</p>
+			<p id="lastmove-text">Last: --</p>
+		</div>
+		<div id="controls" class="panel">
+			<button id="btn-start" class="primary">New Game</button>
+			<button id="btn-reset">Reset</button>
+			<button id="btn-undo">Undo</button>
+			<button id="btn-history">History</button>
+			<button id="btn-rules">Rules</button>
+		</div>
+		<div id="history" class="panel history-panel">
+			<h4>Moves</h4>
+			<button id="btn-history-close" class="history-close">Close</button>
+			<div id="move-list"></div>
+		</div>
+	</div>
+	<div id="start-overlay">
+		<div id="start-card">
+			<h2>Hexagonal Chess</h2>
+			<p>Select mode and difficulty</p>
+			<div class="btn-row">
+				<button id="btn-1p">1 Player (vs AI)</button>
+				<button id="btn-2p" class="secondary">2 Players</button>
+			</div>
+			<p style="margin-top:12px; margin-bottom:6px;">AI Difficulty</p>
+			<div class="btn-row">
+				<button id="btn-easy" class="secondary">Easy</button>
+				<button id="btn-med" class="active">Medium</button>
+				<button id="btn-hard" class="secondary">Hard</button>
+			</div>
+			<div class="btn-row" style="margin-top:12px;">
+				<button id="btn-start-overlay" class="primary">Start</button>
+			</div>
+		</div>
+	</div>
+	<div id="rules-overlay">
+		<div id="rules-card">
+			<h3>Rules</h3>
+			<ul>
+				<li>Hex board: 9 columns x 9 rows using pointy-top hexes (offset rows). White starts at bottom rows, Black at top.</li>
+				<li>Lineup (9 cells): R N B Q K B N B R; pawns fill the next row. No castling or en passant.</li>
+				<li>Movement is adapted to hex adjacency. Rooks slide along all 6 hex directions; bishops slide on the 4 diagonal-ish directions; queens combine; knights use 12 short leaps; kings step 1 in any hex direction; pawns move 1 forward and capture on the two forward diagonals; promote to queen on the far edge.</li>
+				<li>Capture the enemy king to win (no check/checkmate detection).</li>
+				<li>Controls: mouse/touch click; keyboard arrows + Enter/Space; controller stick/D-pad move, A select/move, B cancel, X reset, LB undo, Y rules, Start opens start screen.</li>
+			</ul>
+			<button id="close-rules">Close</button>
+		</div>
+	</div>
+</div>
+<script>
+(function() {
+	const COLS = 9;
+	const ROWS = 9;
+	const dpr = window.devicePixelRatio || 1;
+	const LIGHT = 1;
+	const DARK = 2;
+	const PIECE_VALUES = { K: 100, Q: 9, R: 5, B: 3, N: 3, P: 1 };
+
+	const container = document.getElementById("game-container");
+	const hud = document.getElementById("hud");
+	const startOverlay = document.getElementById("start-overlay");
+	const btn1p = document.getElementById("btn-1p");
+	const btn2p = document.getElementById("btn-2p");
+	const btnEasy = document.getElementById("btn-easy");
+	const btnMed = document.getElementById("btn-med");
+	const btnHard = document.getElementById("btn-hard");
+	const btnStartOverlay = document.getElementById("btn-start-overlay");
+	const btnRules = document.getElementById("btn-rules");
+	const rulesOverlay = document.getElementById("rules-overlay");
+	const closeRules = document.getElementById("close-rules");
+	const hudBtnStart = document.getElementById("btn-start");
+	const hudBtnReset = document.getElementById("btn-reset");
+	const hudBtnUndo = document.getElementById("btn-undo");
+	const hudBtnHistory = document.getElementById("btn-history");
+	const btnHistoryClose = document.getElementById("btn-history-close");
+	const historyPanel = document.getElementById("history");
+	const turnText = document.getElementById("turn-text");
+	const aiText = document.getElementById("ai-text");
+	const msgText = document.getElementById("msg-text");
+	const capText = document.getElementById("cap-text");
+	const lastMoveText = document.getElementById("lastmove-text");
+	const moveList = document.getElementById("move-list");
+
+	const boardLayer = document.createElement("canvas");
+	const piecesLayer = document.createElement("canvas");
+	const uiLayer = document.createElement("canvas");
+	boardLayer.className = "layer-board";
+	piecesLayer.className = "layer-pieces";
+	uiLayer.className = "layer-ui";
+	container.appendChild(boardLayer);
+	container.appendChild(piecesLayer);
+	container.appendChild(uiLayer);
+
+	const layout = { width: 0, height: 0, cell: 0, originX: 0, originY: 0, hexHeight: 0, hexWidth: 0, vert: 0 };
+
+	const state = {
+		board: createEmptyBoard(),
+		turn: LIGHT,
+		moveHistory: [],
+		lastMove: null,
+		captures: { [LIGHT]: 0, [DARK]: 0 },
+		gameOver: false,
+		winner: null,
+		message: "",
+		cursor: { c: 4, r: ROWS - 1 },
+		selected: null,
+		legal: [],
+		aiEnabled: true,
+		aiColor: DARK,
+		aiLevel: "medium",
+		thinking: false,
+		menuActive: true
+	};
+
+	let selectedMode = "1p";
+	let selectedDiff = "medium";
+
+	function createEmptyBoard() { return Array.from({ length: ROWS }, () => Array(COLS).fill(null)); }
+	function p(type, color) { return { type: type.toUpperCase(), color }; }
+
+	function resetBoard() {
+		const back = ["R","N","B","Q","K","B","N","B","R"];
+		const b = createEmptyBoard();
+		b[0] = back.map(t => p(t, DARK));
+		b[1] = Array(COLS).fill(p("P", DARK));
+		b[ROWS - 2] = Array(COLS).fill(p("P", LIGHT));
+		b[ROWS - 1] = back.map(t => p(t, LIGHT));
+
+		state.board = b;
+		state.turn = LIGHT;
+		state.moveHistory = [];
+		state.lastMove = null;
+		state.captures = { [LIGHT]: 0, [DARK]: 0 };
+		state.gameOver = false;
+		state.winner = null;
+		state.message = "";
+		state.selected = null;
+		state.legal = [];
+		state.cursor = { c: Math.floor(COLS / 2), r: ROWS - 1 };
+		updateHud();
+	}
+
+	function resize() {
+		layout.width = window.innerWidth;
+		layout.height = window.innerHeight;
+		[boardLayer, piecesLayer, uiLayer].forEach(c => {
+			c.width = layout.width * dpr;
+			c.height = layout.height * dpr;
+			c.style.width = `${layout.width}px`;
+			c.style.height = `${layout.height}px`;
+			const ctx = c.getContext("2d");
+			ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+		});
+
+		const isMobile = window.matchMedia("(max-width: 720px)").matches;
+		const hudRect = hud.getBoundingClientRect();
+		const leftPad = isMobile ? 0 : (hudRect.right + 12);
+		const rightPad = isMobile ? 0 : 12;
+		const availWidth = Math.max(420, layout.width - leftPad - rightPad);
+		const maxBoardSize = Math.min(availWidth, layout.height * 0.92);
+
+		layout.cell = maxBoardSize / (COLS + 1);
+		layout.hexWidth = layout.cell * 2;
+		layout.hexHeight = Math.sqrt(3) * layout.cell;
+		layout.vert = layout.hexHeight * 0.75;
+		const boardPixelWidth = layout.hexWidth * 0.75 * (COLS - 1) + layout.hexWidth;
+		const boardPixelHeight = layout.vert * (ROWS - 1) + layout.hexHeight;
+		layout.originX = leftPad + (availWidth - boardPixelWidth) / 2 + layout.hexWidth / 2;
+		layout.originY = (layout.height - boardPixelHeight) / 2 + layout.hexHeight / 2;
+		maybeRunAI();
+	}
+
+	function hexToPixel(c, r) {
+		const x = layout.originX + layout.hexWidth * 0.75 * c;
+		const y = layout.originY + layout.vert * r + (c % 2 ? layout.vert / 2 : 0);
+		return { x, y };
+	}
+
+	function drawHex(ctx, x, y, radius, fill) {
+		const angle = Math.PI / 3;
+		ctx.beginPath();
+		for (let i = 0; i < 6; i++) {
+			const px = x + radius * Math.cos(angle * i + Math.PI / 6);
+			const py = y + radius * Math.sin(angle * i + Math.PI / 6);
+			if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+		}
+		ctx.closePath();
+		ctx.fillStyle = fill;
+		ctx.fill();
+	}
+
+	function drawBoard(ctx) {
+		ctx.clearRect(0, 0, layout.width, layout.height);
+		ctx.fillStyle = "#0f0f12";
+		ctx.fillRect(0, 0, layout.width, layout.height);
+		const radius = layout.cell;
+		for (let r = 0; r < ROWS; r++) {
+			for (let c = 0; c < COLS; c++) {
+				const { x, y } = hexToPixel(c, r);
+				const even = (c + r) % 2 === 0;
+				drawHex(ctx, x, y, radius, even ? "#2f2f36" : "#454552");
+			}
+		}
+	}
+
+	function drawPieces(ctx) {
+		ctx.clearRect(0, 0, layout.width, layout.height);
+		ctx.font = `${layout.cell * 0.8}px sans-serif`;
+		ctx.textAlign = "center";
+		ctx.textBaseline = "middle";
+		for (let r = 0; r < ROWS; r++) {
+			for (let c = 0; c < COLS; c++) {
+				const piece = state.board[r][c];
+				if (!piece) continue;
+				const { x, y } = hexToPixel(c, r);
+				ctx.fillStyle = piece.color === LIGHT ? "#f5f5f5" : "#111";
+				ctx.strokeStyle = "#000";
+				ctx.lineWidth = 1;
+				drawHex(ctx, x, y, layout.cell * 0.82, ctx.fillStyle);
+				ctx.stroke();
+				ctx.fillStyle = piece.color === LIGHT ? "#111" : "#f5f5f5";
+				ctx.fillText(piece.type, x, y + layout.cell * 0.05);
+			}
+		}
+
+		const ui = uiLayer.getContext("2d");
+		ui.clearRect(0, 0, layout.width, layout.height);
+		if (state.selected) {
+			drawHexOutline(ui, state.selected.c, state.selected.r, "#ffb74d", 3);
+			state.legal.forEach(m => drawHexOutline(ui, m.c, m.r, "#ffd166", 2));
+		}
+		if (state.lastMove) {
+			drawHexOutline(ui, state.lastMove.from.c, state.lastMove.from.r, "#64b5f6", 2);
+			drawHexOutline(ui, state.lastMove.to.c, state.lastMove.to.r, "#64b5f6", 2);
+		}
+		drawCursor(ui);
+		drawUI(ui);
+	}
+
+	function drawHexOutline(ctx, c, r, color, w) {
+		const { x, y } = hexToPixel(c, r);
+		const angle = Math.PI / 3;
+		ctx.beginPath();
+		for (let i = 0; i < 6; i++) {
+			const px = x + layout.cell * 0.88 * Math.cos(angle * i + Math.PI / 6);
+			const py = y + layout.cell * 0.88 * Math.sin(angle * i + Math.PI / 6);
+			if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+		}
+		ctx.closePath();
+		ctx.strokeStyle = color;
+		ctx.lineWidth = w;
+		ctx.stroke();
+	}
+
+	function drawCursor(ctx) {
+		const { c, r } = state.cursor;
+		drawHexOutline(ctx, c, r, "#ffb74d", 2);
+	}
+
+	function drawUI(ctx) {
+		if (state.gameOver) {
+			ctx.fillStyle = "rgba(0,0,0,0.7)";
+			ctx.fillRect(14, 14, 280, 52);
+			ctx.fillStyle = "#fff";
+			ctx.font = "16px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+			ctx.fillText(`Winner: ${state.winner}`, 24, 45);
+		}
+	}
+
+	function onBoard(c, r) { return c >= 0 && c < COLS && r >= 0 && r < ROWS; }
+
+	const axialDirs = [[1,0],[1,-1],[0,-1],[-1,0],[-1,1],[0,1]];
+	const bishopDirs = [axialDirs[1], axialDirs[2], axialDirs[4], axialDirs[5]];
+
+	function offsetToAxial(c, r) {
+		const q = c - (r - (r & 1)) / 2;
+		const s = r;
+		return { q, r: s };
+	}
+	function axialToOffset(q, r) {
+		const c = q + (r - (r & 1)) / 2;
+		return { c, r };
+	}
+
+	function genMovesFor(c, r, board) {
+		const piece = board[r][c];
+		if (!piece) return [];
+		const moves = [];
+		const { q, r: ar } = offsetToAxial(c, r);
+		const forward = piece.color === LIGHT ? -1 : 1;
+
+		switch (piece.type) {
+			case "P": {
+				const forwardDirs = piece.color === LIGHT ? [[0,-1],[1,-1]] : [[0,1],[-1,1]];
+				for (const [dq, dr] of forwardDirs) {
+					const nq = q + dq;
+					const nr = ar + dr;
+					const { c: nc, r: nrO } = axialToOffset(nq, nr);
+					if (!onBoard(nc, nrO)) continue;
+					if (dq === 0) {
+						if (!board[nrO][nc]) moves.push({ c: nc, r: nrO });
+					} else {
+						const target = board[nrO][nc];
+						if (target && target.color !== piece.color) moves.push({ c: nc, r: nrO });
+					}
+				}
+				break;
+			}
+			case "R": slide(axialDirs, q, ar, board, piece.color, moves); break;
+			case "B": slide(bishopDirs, q, ar, board, piece.color, moves); break;
+			case "Q": slide([...axialDirs, ...bishopDirs], q, ar, board, piece.color, moves); break;
+			case "N": knight(q, ar, board, piece.color, moves); break;
+			case "K": king(q, ar, board, piece.color, moves); break;
+		}
+		return moves;
+	}
+
+	function slide(dirs, q, r, board, color, out) {
+		for (const [dq, dr] of dirs) {
+			let nq = q + dq;
+			let nr = r + dr;
+			while (true) {
+				const { c, r: or } = axialToOffset(nq, nr);
+				if (!onBoard(c, or)) break;
+				const target = board[or][c];
+				if (!target) out.push({ c, r: or });
+				else {
+					if (target.color !== color) out.push({ c, r: or });
+					break;
+				}
+				nq += dq;
+				nr += dr;
+			}
+		}
+	}
+
+	function knight(q, r, board, color, out) {
+		const leaps = [
+			[2,-1],[2,1],[1,2],[-1,2],[-2,1],[-2,-1],[-1,-2],[1,-2],
+			[3,-1],[1,-3],[-1,-2],[-3,1]
+		];
+		for (const [dq, dr] of leaps) {
+			const { c, r: or } = axialToOffset(q + dq, r + dr);
+			if (!onBoard(c, or)) continue;
+			const target = board[or][c];
+			if (!target || target.color !== color) out.push({ c, r: or });
+		}
+	}
+
+	function king(q, r, board, color, out) {
+		for (const [dq, dr] of axialDirs) {
+			const { c, r: or } = axialToOffset(q + dq, r + dr);
+			if (!onBoard(c, or)) continue;
+			const target = board[or][c];
+			if (!target || target.color !== color) out.push({ c, r: or });
+		}
+	}
+
+	function makeMove(fc, fr, tc, tr) {
+		const piece = state.board[fr][fc];
+		const target = state.board[tr][tc];
+		const move = { from: { c: fc, r: fr }, to: { c: tc, r: tr }, piece: { ...piece }, captured: target ? { ...target } : null };
+
+		state.board[fr][fc] = null;
+		state.board[tr][tc] = piece;
+
+		if (piece.type === "P" && ((piece.color === LIGHT && tr === 0) || (piece.color === DARK && tr === ROWS - 1))) {
+			piece.type = "Q";
+			move.promoted = true;
+		}
+
+		if (target) state.captures[piece.color] += PIECE_VALUES[target.type] || 1;
+
+		state.moveHistory.push(move);
+		state.lastMove = move;
+
+		if (target && target.type === "K") {
+			state.gameOver = true;
+			state.winner = piece.color === LIGHT ? "White" : "Black";
+			state.message = "King captured";
+			return;
+		}
+
+		state.turn = state.turn === LIGHT ? DARK : LIGHT;
+		state.message = "";
+		updateHud();
+	}
+
+	function undo() {
+		const mv = state.moveHistory.pop();
+		if (!mv) return;
+		state.board[mv.from.r][mv.from.c] = { ...mv.piece };
+		state.board[mv.to.r][mv.to.c] = mv.captured ? { ...mv.captured } : null;
+		if (mv.promoted) state.board[mv.from.r][mv.from.c].type = "P";
+		if (mv.captured) state.captures[mv.piece.color] -= PIECE_VALUES[mv.captured.type] || 1;
+		state.turn = mv.piece.color;
+		state.lastMove = state.moveHistory[state.moveHistory.length - 1] || null;
+		state.gameOver = false;
+		state.winner = null;
+		updateHud();
+	}
+
+	function listMovesForColor(color) {
+		const moves = [];
+		for (let r = 0; r < ROWS; r++) {
+			for (let c = 0; c < COLS; c++) {
+				const pc = state.board[r][c];
+				if (!pc || pc.color !== color) continue;
+				const legal = genMovesFor(c, r, state.board);
+				for (const m of legal) moves.push({ from: { c, r }, to: m, piece: pc });
+			}
+		}
+		return moves;
+	}
+
+	function aiChooseMove() {
+		const moves = listMovesForColor(state.aiColor);
+		if (!moves.length) return null;
+		if (state.aiLevel === "easy") return moves[Math.floor(Math.random() * moves.length)];
+
+		let bestScore = -Infinity;
+		const scored = [];
+		for (const mv of moves) {
+			const target = state.board[mv.to.r][mv.to.c];
+			const cap = target ? (PIECE_VALUES[target.type] || 1) : 0;
+			let score = cap + Math.random() * 0.05;
+			if (state.aiLevel === "hard") score += cap * 2 - (PIECE_VALUES[mv.piece.type] || 1) * 0.4;
+			bestScore = Math.max(bestScore, score);
+			scored.push({ mv, score });
+		}
+		const bestMoves = scored.filter(s => s.score >= bestScore - 0.001).map(s => s.mv);
+		return bestMoves[Math.floor(Math.random() * bestMoves.length)];
+	}
+
+	function maybeRunAI() {
+		if (!state.aiEnabled) return;
+		if (state.menuActive) return;
+		if (state.gameOver) return;
+		if (state.turn !== state.aiColor) return;
+		if (state.thinking) return;
+		state.thinking = true;
+		setTimeout(() => {
+			const mv = aiChooseMove();
+			if (mv) makeMove(mv.from.c, mv.from.r, mv.to.c, mv.to.r);
+			state.thinking = false;
+			render();
+			updateHud();
+			maybeRunAI();
+		}, 140);
+	}
+
+	function toggleRules(force) {
+		const show = force !== undefined ? force : !rulesOverlay.classList.contains("show");
+		rulesOverlay.classList.toggle("show", show);
+	}
+
+	function toggleHistory(force) {
+		const show = force !== undefined ? force : !historyPanel.classList.contains("show");
+		historyPanel.classList.toggle("show", show);
+	}
+
+	function showStartOverlay() {
+		startOverlay.style.display = "flex";
+		state.menuActive = true;
+	}
+
+	function updateHud() {
+		turnText.textContent = `Turn: ${state.turn === LIGHT ? "WHITE" : "BLACK"}`;
+		aiText.textContent = state.aiEnabled ? `AI: ${state.aiLevel.toUpperCase()} (${state.aiColor === LIGHT ? "WHITE" : "BLACK"})` : "AI: OFF";
+		if (state.gameOver && state.winner) msgText.textContent = `${state.winner} wins`;
+		else msgText.textContent = state.message || "Ready";
+		capText.textContent = `Captures W:${state.captures[LIGHT]} B:${state.captures[DARK]}`;
+		if (state.lastMove) {
+			const { from, to } = state.lastMove;
+			lastMoveText.textContent = `Last: ${sq(from.c, from.r)}->${sq(to.c, to.r)}`;
+		} else {
+			lastMoveText.textContent = "Last: --";
+		}
+		renderHistory();
+	}
+
+	function sq(c, r) { return `${String.fromCharCode(97 + c)}${ROWS - r}`; }
+
+	function renderHistory() {
+		moveList.innerHTML = state.moveHistory.map((mv, i) => {
+			const capMark = mv.captured ? "x" : "-";
+			const promo = mv.promoted ? "=Q" : "";
+			return `<div class="move-line">${i + 1}. ${sq(mv.from.c, mv.from.r)}${capMark}${sq(mv.to.c, mv.to.r)}${promo}</div>`;
+		}).join("");
+	}
+
+	function moveCursor(dc, dr) {
+		if (state.menuActive) return;
+		const { c, r } = state.cursor;
+		const nc = Math.max(0, Math.min(COLS - 1, c + dc));
+		const nr = Math.max(0, Math.min(ROWS - 1, r + dr));
+		state.cursor = { c: nc, r: nr };
+		state.message = "";
+		render();
+		updateHud();
+	}
+
+	function clickCell(c, r) {
+		const piece = state.board[r][c];
+		if (state.selected) {
+			const isLegal = state.legal.some(m => m.c === c && m.r === r);
+			if (isLegal) {
+				makeMove(state.selected.c, state.selected.r, c, r);
+				state.selected = null;
+				state.legal = [];
+				return;
+			}
+		}
+		if (piece && piece.color === state.turn) {
+			state.selected = { c, r };
+			state.legal = genMovesFor(c, r, state.board);
+			state.cursor = { c, r };
+			state.message = "";
+		} else {
+			state.selected = null;
+			state.legal = [];
+		}
+		updateHud();
+	}
+
+	function handlePointer(e) {
+		if (state.menuActive) return;
+		const mx = e.offsetX;
+		const my = e.offsetY;
+		let closest = { c: 0, r: 0, dist: Infinity };
+		for (let r = 0; r < ROWS; r++) {
+			for (let c = 0; c < COLS; c++) {
+				const { x, y } = hexToPixel(c, r);
+				const dx = x - mx;
+				const dy = y - my;
+				const d2 = dx * dx + dy * dy;
+				if (d2 < closest.dist) closest = { c, r, dist: d2 };
+			}
+		}
+		const { c, r } = closest;
+		if (!onBoard(c, r)) return;
+		state.cursor = { c, r };
+		clickCell(c, r);
+		render();
+		maybeRunAI();
+		updateHud();
+	}
+
+	function handleKey(e) {
+		const key = e.key.toLowerCase();
+		if (rulesOverlay.classList.contains("show")) {
+			if (["h","escape","enter"," "].includes(key)) toggleRules(false);
+			return;
+		}
+		if (state.menuActive) {
+			if (key === "1") { selectedMode = "1p"; applyModeUI(); }
+			else if (key === "2") { selectedMode = "2p"; applyModeUI(); }
+			else if (key === "arrowup" || key === "w") { cycleDiff(-1); }
+			else if (key === "arrowdown" || key === "s") { cycleDiff(1); }
+			else if (key === "enter" || key === " ") { startSelected(); }
+			return;
+		}
+		if (key === "arrowup") moveCursor(0, -1);
+		else if (key === "arrowdown") moveCursor(0, 1);
+		else if (key === "arrowleft") moveCursor(-1, 0);
+		else if (key === "arrowright") moveCursor(1, 0);
+		else if (key === "enter" || key === " ") { clickCell(state.cursor.c, state.cursor.r); maybeRunAI(); }
+		else if (key === "escape" || key === "b") { state.selected = null; state.legal = []; state.message = ""; }
+		else if (key === "u") { undo(); }
+		else if (key === "r") { resetBoard(); }
+		else if (key === "h") { toggleRules(); }
+		else if (key === "v") { state.aiEnabled = !state.aiEnabled; state.message = state.aiEnabled ? "AI enabled" : "AI disabled"; }
+		render(); updateHud();
+	}
+
+	function start1P() {
+		state.aiEnabled = true;
+		state.aiColor = DARK;
+		state.menuActive = false;
+		startOverlay.style.display = "none";
+		resetBoard();
+		applyDifficultyUI();
+		render();
+		updateHud();
+		maybeRunAI();
+	}
+
+	function start2P() {
+		state.aiEnabled = false;
+		state.menuActive = false;
+		startOverlay.style.display = "none";
+		resetBoard();
+		applyDifficultyUI();
+		render();
+		updateHud();
+	}
+
+	function startSelected() {
+		state.aiLevel = selectedDiff;
+		if (selectedMode === "1p") start1P(); else start2P();
+	}
+
+	function setDifficulty(level) {
+		state.aiLevel = level;
+		selectedDiff = level;
+		applyDifficultyUI();
+		updateHud();
+	}
+
+	function applyModeUI() {
+		[btn1p, btn2p].forEach(b => b.classList.remove("active"));
+		if (selectedMode === "1p") btn1p.classList.add("active"); else btn2p.classList.add("active");
+	}
+
+	function applyDifficultyUI() {
+		[btnEasy, btnMed, btnHard].forEach(b => b.classList.remove("active"));
+		if (state.aiLevel === "easy") btnEasy.classList.add("active");
+		else if (state.aiLevel === "hard") btnHard.classList.add("active");
+		else btnMed.classList.add("active");
+		selectedDiff = state.aiLevel;
+	}
+
+	function cycleDiff(delta) {
+		const diffs = ["easy", "medium", "hard"];
+		const idx = diffs.indexOf(selectedDiff);
+		selectedDiff = diffs[(idx + delta + diffs.length) % diffs.length];
+		state.aiLevel = selectedDiff;
+		applyDifficultyUI();
+	}
+
+	function render() {
+		drawBoard(boardLayer.getContext("2d"));
+		drawPieces(piecesLayer.getContext("2d"));
+	}
+
+	resetBoard();
+	resize();
+	applyDifficultyUI();
+	applyModeUI();
+	render();
+	updateHud();
+
+	uiLayer.addEventListener("mousedown", handlePointer);
+	window.addEventListener("keydown", handleKey);
+	window.addEventListener("resize", () => { resize(); render(); });
+	btn1p.addEventListener("click", () => { selectedMode = "1p"; applyModeUI(); });
+	btn2p.addEventListener("click", () => { selectedMode = "2p"; applyModeUI(); });
+	btnEasy.addEventListener("click", () => { setDifficulty("easy"); });
+	btnMed.addEventListener("click", () => { setDifficulty("medium"); });
+	btnHard.addEventListener("click", () => { setDifficulty("hard"); });
+	btnStartOverlay.addEventListener("click", startSelected);
+	btnRules.addEventListener("click", () => toggleRules(true));
+	closeRules.addEventListener("click", () => toggleRules(false));
+	hudBtnStart.addEventListener("click", showStartOverlay);
+	hudBtnReset.addEventListener("click", () => { resetBoard(); render(); updateHud(); });
+	hudBtnUndo.addEventListener("click", () => { undo(); render(); updateHud(); });
+	hudBtnHistory.addEventListener("click", () => toggleHistory());
+	btnHistoryClose.addEventListener("click", () => toggleHistory(false));
+
+})();
+</script>
+</body>
+</html>
