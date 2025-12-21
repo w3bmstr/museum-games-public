@@ -117,8 +117,15 @@
   .stat-line { margin: 4px 0; color: var(--muted); font-size: 13px; }
   .move-line { display: flex; gap: 8px; padding: 4px 6px; border-radius: 6px; }
   .move-line:nth-child(odd) { background: rgba(255,255,255,0.06); }
-  @media (max-width: 1080px) { main { grid-template-columns: 1fr; } #ui-panel { border-left: none; border-top: 1px solid rgba(255,255,255,0.06); } }
-  @media (max-width: 720px) { #board-wrapper { padding: 10px; } header { flex-direction: column; align-items: flex-start; } }
+  @media (max-width: 1080px) {
+    main { display: flex; flex-direction: column; }
+    #board-wrapper { flex: 1 1 auto; min-height: 50vh; }
+    #ui-panel { border-left: none; border-top: 1px solid rgba(255,255,255,0.06); height: auto; max-height: 46vh; }
+  }
+  @media (max-width: 720px) {
+    #board-wrapper { padding: 10px; min-height: 52vh; }
+    header { flex-direction: column; align-items: flex-start; }
+  }
   .overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(8,10,16,0.82); backdrop-filter: blur(4px); z-index: 20; }
   .dialog { background: var(--panel-2); border: 1px solid rgba(255,255,255,0.08); padding: 20px; border-radius: 12px; width: min(540px, 92%); box-shadow: 0 16px 50px rgba(0,0,0,0.35); }
   .dialog h2 { margin: 0 0 8px; }
