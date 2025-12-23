@@ -45,7 +45,7 @@
   }
   header {
     position: sticky;
-    top: 0;
+    top: env(safe-area-inset-top, 0px);
     z-index: 5;
     padding: calc(16px + env(safe-area-inset-top, 0px)) 18px 10px;
     display: flex;
