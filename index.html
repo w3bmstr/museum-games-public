@@ -17,17 +17,21 @@
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; width: 100%; min-height: 100vh; }
   body {
-    background: radial-gradient(circle at 20% 20%, #121828, var(--bg) 42%);
+    background: radial-gradient(circle at 20% 20%, #121828, #0c0f16 40%);
     font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
     color: var(--text);
-    padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
     min-height: 100vh;
-    overflow-x: hidden;
-    overflow-y: auto;
+    height: 100vh;
+    padding: 0;
+    overflow: hidden;
   }
   #app {
     width: 100%;
-    max-width: 1500px;
+    height: 100vh;
+    max-width: 1400px;
     background: var(--panel);
     border: 1px solid rgba(255,255,255,0.06);
     border-radius: 16px;
@@ -35,8 +39,8 @@
     box-shadow: 0 20px 60px rgba(0,0,0,0.35);
     display: flex;
     flex-direction: column;
-    margin: 0 auto;
-    min-height: 100vh;
+    position: relative;
+    z-index: 1;
   }
   header {
     position: static;
@@ -151,7 +155,8 @@
   }
   @media (max-width: 640px) {
     #board-wrapper { padding: 10px; }
-    header { flex-direction: column; align-items: flex-start; padding: 18px 14px 10px; }
+    header { flex-direction: column; align-items: flex-start; }
+    body { padding: 0; }
   }
 </style>
 </head>
