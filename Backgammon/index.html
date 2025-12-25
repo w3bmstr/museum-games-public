@@ -249,7 +249,9 @@
     const dpr = window.devicePixelRatio || 1;
 
     function isStackedLayout() {
-      return window.innerWidth <= 720;
+      const wrapperWidth = boardWrapper?.getBoundingClientRect().width || window.innerWidth;
+      const basis = Math.min(window.innerWidth, wrapperWidth);
+      return basis <= 900; // treat phones/tablets as stacked
     }
 
     function resizeCanvas() {
