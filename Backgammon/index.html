@@ -258,7 +258,8 @@
       const stacked = isStackedLayout();
       if (stacked) {
         // Ensure enough vertical space for stacked halves on mobile
-        const targetH = Math.max(520, boardWrapper.getBoundingClientRect().width * 1.6);
+        const w = boardWrapper.getBoundingClientRect().width || window.innerWidth;
+        const targetH = Math.max(640, w * 2.1); // taller to fit both halves comfortably
         boardWrapper.style.height = targetH + 'px';
       } else {
         boardWrapper.style.height = '';
