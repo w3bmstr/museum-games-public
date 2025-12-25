@@ -248,6 +248,10 @@
 
     const dpr = window.devicePixelRatio || 1;
 
+    function isStackedLayout() {
+      return window.innerWidth <= 720;
+    }
+
     function resizeCanvas() {
       const rect = boardWrapper.getBoundingClientRect();
       const width = rect.width;
@@ -458,29 +462,55 @@
       const margin = Math.max(18, Math.min(canvas.width, canvas.height) * 0.06);
       const usableWidth = canvas.width - margin * 2;
       const usableHeight = canvas.height - margin * 2;
-      const barW = usableWidth * 0.06;
-      const ptW = (usableWidth - barW) / 12;
-      const ptH = usableHeight / 2;
-      const leftHalfW = ptW * 6;
       const ox = margin;
       const oy = margin;
       const localX = x - ox;
       const localY = y - oy;
       if (localX < 0 || localX > usableWidth || localY < 0 || localY > usableHeight) return null;
 
-      if (localX >= leftHalfW && localX <= leftHalfW + barW) return { type:'bar' };
+      if (!isStackedLayout()) {
+        const barW = usableWidth * 0.06;
+        const ptW = (usableWidth - barW) / 12;
+        const ptH = usableHeight / 2;
+        const leftHalfW = ptW * 6;
 
-      const isTop = localY < ptH;
-      if (localX < leftHalfW) {
-        const col = Math.floor(localX / ptW);
-        const idx = isTop ? 12 + col : col;
+        if (localX >= leftHalfW && localX <= leftHalfW + barW) return { type:'bar' };
+
+        const isTop = localY < ptH;
+        if (localX < leftHalfW) {
+          const col = Math.floor(localX / ptW);
+          const idx = isTop ? 12 + col : col;
+          return { type:'point', index: idx };
+        }
+
+        const rightX = localX - leftHalfW - barW;
+        const colR = Math.floor(rightX / ptW);
+        if (colR < 0 || colR > 5) return null;
+        const idx = isTop ? 18 + colR : 6 + colR;
         return { type:'point', index: idx };
       }
 
-      const rightX = localX - leftHalfW - barW;
-      const colR = Math.floor(rightX / ptW);
-      if (colR < 0 || colR > 5) return null;
-      const idx = isTop ? 18 + colR : 6 + colR;
+      // Stacked layout: left half on top, right half on bottom
+      const barH = usableHeight * 0.06;
+      const segmentH = (usableHeight - barH) / 2;
+      const ptW = usableWidth / 6;
+      const ptH = segmentH / 2;
+
+      // Bar region between segments
+      if (localY >= segmentH && localY <= segmentH + barH) return { type:'bar' };
+
+      const inTopSegment = localY < segmentH;
+      const segY = inTopSegment ? localY : localY - segmentH - barH;
+      const isTopRow = segY < ptH;
+      const col = Math.floor(localX / ptW);
+      if (col < 0 || col > 5) return null;
+
+      let idx;
+      if (inTopSegment) {
+        idx = isTopRow ? 12 + col : col; // left half indices
+      } else {
+        idx = isTopRow ? 18 + col : 6 + col; // right half indices
+      }
       return { type:'point', index: idx };
     }
 
@@ -490,12 +520,9 @@
       const margin = Math.max(18, Math.min(canvas.width, canvas.height) * 0.06);
       const usableWidth = canvas.width - margin * 2;
       const usableHeight = canvas.height - margin * 2;
-      const barW = usableWidth * 0.06;
-      const ptW = (usableWidth - barW) / 12;
-      const ptH = usableHeight / 2;
-      const leftHalfW = ptW * 6;
       const ox = margin;
       const oy = margin;
+      const stacked = isStackedLayout();
 
       ctx.fillStyle = '#e8dcc4';
       ctx.fillRect(ox, oy, usableWidth, usableHeight);
@@ -503,79 +530,171 @@
       ctx.lineWidth = 2;
       ctx.strokeRect(ox, oy, usableWidth, usableHeight);
 
-      ctx.fillStyle = '#c19a6b';
-      const barX = ox + (usableWidth - barW)/2;
-      ctx.fillRect(barX, oy, barW, usableHeight);
-
-      function drawPointTriangle(col, isLeft, isTop) {
-        const x0 = isLeft ? ox + col * ptW : ox + 6 * ptW + barW + col * ptW;
-        const y0 = isTop ? oy : oy + usableHeight;
-        const dir = isTop ? 1 : -1;
-        const color = (col % 2 === 0) ? 'var(--tri-a)' : 'var(--tri-b)';
-        ctx.beginPath();
-        ctx.moveTo(x0, y0);
-        ctx.lineTo(x0 + ptW, y0);
-        ctx.lineTo(x0 + ptW/2, y0 + dir * ptH * 0.92);
-        ctx.closePath();
-        ctx.fillStyle = color;
-        ctx.fill();
-        ctx.strokeStyle = 'var(--point-outline)';
-        ctx.stroke();
-      }
-
-      for (let row = 0; row < 2; row++) {
-        const isTop = row === 0;
-        for (let col = 0; col < 6; col++) {
-          drawPointTriangle(col, true, isTop);  // left half
-        }
-        for (let col = 0; col < 6; col++) {
-          drawPointTriangle(col, false, isTop); // right half
-        }
-      }
-
       const stackGap = 4;
-      const radius = Math.min(ptW, ptH) * 0.28;
-      function pointX(idx) {
-        const topRow = idx >= 12;
-        const pos = topRow ? idx - 12 : idx; // 0..11 in each row
-        if (pos < 6) return ox + pos * ptW + ptW/2;
-        const colR = pos - 6;
-        return ox + leftHalfW + barW + colR * ptW + ptW/2;
-      }
-      function drawStack(idx) {
-        const p = points[idx];
-        if (!p.count) return;
-        const topRow = idx >= 12;
-        const xCenter = pointX(idx);
-        for (let n = 0; n < p.count; n++) {
-          const yBase = topRow ? oy + radius + n * (radius*2 + stackGap) : oy + usableHeight - radius - n * (radius*2 + stackGap);
-          ctx.beginPath();
-          ctx.arc(xCenter, yBase, radius, 0, Math.PI * 2);
-          ctx.fillStyle = p.color === 1 ? '#f5f7fb' : '#111';
-          ctx.fill();
-          ctx.strokeStyle = 'rgba(0,0,0,0.35)';
-          ctx.lineWidth = 1.5;
-          ctx.stroke();
-        }
-      }
-      for (let i = 0; i < 24; i++) drawStack(i);
 
-      function drawBarStack(player, count, topRow) {
-        if (count === 0) return;
-        for (let n = 0; n < count; n++) {
-          const xCenter = ox + (usableWidth - barW)/2 + barW/2;
-          const yBase = topRow ? oy + radius + n * (radius*2 + stackGap) : oy + usableHeight - radius - n * (radius*2 + stackGap);
+      if (!stacked) {
+        const barW = usableWidth * 0.06;
+        const ptW = (usableWidth - barW) / 12;
+        const ptH = usableHeight / 2;
+        const leftHalfW = ptW * 6;
+
+        ctx.fillStyle = '#c19a6b';
+        const barX = ox + (usableWidth - barW)/2;
+        ctx.fillRect(barX, oy, barW, usableHeight);
+
+        function drawPointTriangle(col, isLeft, isTop) {
+          const x0 = isLeft ? ox + col * ptW : ox + 6 * ptW + barW + col * ptW;
+          const y0 = isTop ? oy : oy + usableHeight;
+          const dir = isTop ? 1 : -1;
+          const color = (col % 2 === 0) ? 'var(--tri-a)' : 'var(--tri-b)';
           ctx.beginPath();
-          ctx.arc(xCenter, yBase, radius, 0, Math.PI * 2);
-          ctx.fillStyle = player === 1 ? '#f5f7fb' : '#111';
+          ctx.moveTo(x0, y0);
+          ctx.lineTo(x0 + ptW, y0);
+          ctx.lineTo(x0 + ptW/2, y0 + dir * ptH * 0.92);
+          ctx.closePath();
+          ctx.fillStyle = color;
           ctx.fill();
-          ctx.strokeStyle = 'rgba(0,0,0,0.35)';
-          ctx.lineWidth = 1.5;
+          ctx.strokeStyle = 'var(--point-outline)';
           ctx.stroke();
         }
+
+        for (let row = 0; row < 2; row++) {
+          const isTop = row === 0;
+          for (let col = 0; col < 6; col++) {
+            drawPointTriangle(col, true, isTop);  // left half
+          }
+          for (let col = 0; col < 6; col++) {
+            drawPointTriangle(col, false, isTop); // right half
+          }
+        }
+
+        const radius = Math.min(ptW, ptH) * 0.28;
+        function pointX(idx) {
+          const topRow = idx >= 12;
+          const pos = topRow ? idx - 12 : idx; // 0..11 in each row
+          if (pos < 6) return ox + pos * ptW + ptW/2;
+          const colR = pos - 6;
+          return ox + leftHalfW + barW + colR * ptW + ptW/2;
+        }
+        function drawStack(idx) {
+          const p = points[idx];
+          if (!p.count) return;
+          const topRow = idx >= 12;
+          const xCenter = pointX(idx);
+          for (let n = 0; n < p.count; n++) {
+            const yBase = topRow ? oy + radius + n * (radius*2 + stackGap) : oy + usableHeight - radius - n * (radius*2 + stackGap);
+            ctx.beginPath();
+            ctx.arc(xCenter, yBase, radius, 0, Math.PI * 2);
+            ctx.fillStyle = p.color === 1 ? '#f5f7fb' : '#111';
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+          }
+        }
+        for (let i = 0; i < 24; i++) drawStack(i);
+
+        function drawBarStack(player, count, topRow) {
+          if (count === 0) return;
+          for (let n = 0; n < count; n++) {
+            const xCenter = ox + (usableWidth - barW)/2 + barW/2;
+            const yBase = topRow ? oy + radius + n * (radius*2 + stackGap) : oy + usableHeight - radius - n * (radius*2 + stackGap);
+            ctx.beginPath();
+            ctx.arc(xCenter, yBase, radius, 0, Math.PI * 2);
+            ctx.fillStyle = player === 1 ? '#f5f7fb' : '#111';
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+          }
+        }
+        drawBarStack(1, bar[1], true);
+        drawBarStack(2, bar[2], false);
+
+      } else {
+        const barH = usableHeight * 0.06;
+        const segmentH = (usableHeight - barH) / 2;
+        const ptW = usableWidth / 6;
+        const ptH = segmentH / 2;
+
+        // Draw horizontal bar between halves
+        ctx.fillStyle = '#c19a6b';
+        const barY = oy + segmentH;
+        ctx.fillRect(ox, barY, usableWidth, barH);
+
+        function drawPointTriangleStacked(col, upperSegment, isTopRow) {
+          const segY = upperSegment ? oy : oy + segmentH + barH;
+          const x0 = ox + col * ptW;
+          const y0 = isTopRow ? segY : segY + segmentH;
+          const dir = isTopRow ? 1 : -1;
+          const color = (col % 2 === 0) ? 'var(--tri-a)' : 'var(--tri-b)';
+          ctx.beginPath();
+          ctx.moveTo(x0, y0);
+          ctx.lineTo(x0 + ptW, y0);
+          ctx.lineTo(x0 + ptW/2, y0 + dir * ptH * 0.92);
+          ctx.closePath();
+          ctx.fillStyle = color;
+          ctx.fill();
+          ctx.strokeStyle = 'var(--point-outline)';
+          ctx.stroke();
+        }
+
+        for (let col = 0; col < 6; col++) {
+          drawPointTriangleStacked(col, true, true);  // top row, upper segment (indices 12-17)
+          drawPointTriangleStacked(col, true, false); // bottom row, upper segment (0-5)
+          drawPointTriangleStacked(col, false, true); // top row, lower segment (18-23)
+          drawPointTriangleStacked(col, false, false);// bottom row, lower segment (6-11)
+        }
+
+        const radius = Math.min(ptW, ptH) * 0.28;
+        function pointCenter(idx) {
+          let col, upperSegment, isTopRow;
+          if (idx <= 5) { col = idx; upperSegment = true; isTopRow = false; }
+          else if (idx <= 11) { col = idx - 6; upperSegment = false; isTopRow = false; }
+          else if (idx <= 17) { col = idx - 12; upperSegment = true; isTopRow = true; }
+          else { col = idx - 18; upperSegment = false; isTopRow = true; }
+
+          const segY = upperSegment ? oy : oy + segmentH + barH;
+          const xCenter = ox + col * ptW + ptW/2;
+          const yBase = isTopRow ? (segY + radius) : (segY + segmentH - radius);
+          return { xCenter, yBase, isTopRow, segY };
+        }
+
+        function drawStack(idx) {
+          const p = points[idx];
+          if (!p.count) return;
+          const info = pointCenter(idx);
+          for (let n = 0; n < p.count; n++) {
+            const yBase = info.isTopRow ? (info.segY + radius + n * (radius*2 + stackGap)) : (info.segY + segmentH - radius - n * (radius*2 + stackGap));
+            ctx.beginPath();
+            ctx.arc(info.xCenter, yBase, radius, 0, Math.PI * 2);
+            ctx.fillStyle = p.color === 1 ? '#f5f7fb' : '#111';
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+          }
+        }
+        for (let i = 0; i < 24; i++) drawStack(i);
+
+        function drawBarStackHorizontal(player, count, topSide) {
+          if (count === 0) return;
+          const centerY = oy + segmentH + barH/2;
+          for (let n = 0; n < count; n++) {
+            const yCenter = centerY + (topSide ? -1 : 1) * (radius + n * (radius*2 + stackGap));
+            const xCenter = ox + usableWidth/2;
+            ctx.beginPath();
+            ctx.arc(xCenter, yCenter, radius, 0, Math.PI * 2);
+            ctx.fillStyle = player === 1 ? '#f5f7fb' : '#111';
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+          }
+        }
+        drawBarStackHorizontal(1, bar[1], true);
+        drawBarStackHorizontal(2, bar[2], false);
       }
-      drawBarStack(1, bar[1], true);
-      drawBarStack(2, bar[2], false);
 
       drawTargets();
       drawDice();
@@ -589,23 +708,45 @@
       const margin = Math.max(18, Math.min(canvas.width, canvas.height) * 0.06);
       const usableWidth = canvas.width - margin * 2;
       const usableHeight = canvas.height - margin * 2;
-      const barW = usableWidth * 0.06;
-      const ptW = (usableWidth - barW) / 12;
-      const ptH = usableHeight / 2;
-      const leftHalfW = ptW * 6;
       const ox = margin;
       const oy = margin;
       const targets = legalTargets.filter(m => m.from === selectedPoint);
-      targets.forEach(m => {
-        if (m.to === 'bear') return;
-        const idx = m.to;
-        const topRow = idx >= 12;
-        const pos = topRow ? idx - 12 : idx;
-        const inLeft = pos < 6;
-        const x0 = inLeft ? ox + pos * ptW : ox + leftHalfW + barW + (pos - 6) * ptW;
-        const y0 = topRow ? oy : oy + ptH;
-        ctx.fillRect(x0, y0, ptW, ptH);
-      });
+      const stacked = isStackedLayout();
+
+      if (!stacked) {
+        const barW = usableWidth * 0.06;
+        const ptW = (usableWidth - barW) / 12;
+        const ptH = usableHeight / 2;
+        const leftHalfW = ptW * 6;
+        targets.forEach(m => {
+          if (m.to === 'bear') return;
+          const idx = m.to;
+          const topRow = idx >= 12;
+          const pos = topRow ? idx - 12 : idx;
+          const inLeft = pos < 6;
+          const x0 = inLeft ? ox + pos * ptW : ox + leftHalfW + barW + (pos - 6) * ptW;
+          const y0 = topRow ? oy : oy + ptH;
+          ctx.fillRect(x0, y0, ptW, ptH);
+        });
+      } else {
+        const barH = usableHeight * 0.06;
+        const segmentH = (usableHeight - barH) / 2;
+        const ptW = usableWidth / 6;
+        const ptH = segmentH / 2;
+        targets.forEach(m => {
+          if (m.to === 'bear') return;
+          const idx = m.to;
+          let col, upperSegment, isTopRow;
+          if (idx <= 5) { col = idx; upperSegment = true; isTopRow = false; }
+          else if (idx <= 11) { col = idx - 6; upperSegment = false; isTopRow = false; }
+          else if (idx <= 17) { col = idx - 12; upperSegment = true; isTopRow = true; }
+          else { col = idx - 18; upperSegment = false; isTopRow = true; }
+          const segY = upperSegment ? oy : oy + segmentH + barH;
+          const x0 = ox + col * ptW;
+          const y0 = isTopRow ? segY : segY + ptH;
+          ctx.fillRect(x0, y0, ptW, ptH);
+        });
+      }
       ctx.restore();
     }
 
