@@ -130,6 +130,9 @@
       cursor: pointer;
     }
     @media (max-width: 960px) { main { grid-template-columns: 1fr; } #ui-panel { min-width: 0; } }
+    @media (max-width: 900px) {
+      #board-wrapper { min-height: 140vw; }
+    }
   </style>
 </head>
 <body>
@@ -255,16 +258,6 @@
     }
 
     function resizeCanvas() {
-      const stacked = isStackedLayout();
-      if (stacked) {
-        // Ensure enough vertical space for stacked halves on mobile
-        const w = boardWrapper.getBoundingClientRect().width || window.innerWidth;
-        const targetH = Math.max(640, w * 2.1); // taller to fit both halves comfortably
-        boardWrapper.style.height = targetH + 'px';
-      } else {
-        boardWrapper.style.height = '';
-      }
-
       const rect = boardWrapper.getBoundingClientRect();
       const width = rect.width;
       const height = rect.height;
