@@ -255,6 +255,26 @@
 
     const dpr = window.devicePixelRatio || 1;
 
+    // Board index mapping: indices still count 0-23 clockwise for logic,
+    // but rendering/hit-tests need to place point 0 at the bottom-right
+    // (standard backgammon view) instead of the previous bottom-left layout.
+    const topRowOrder = [12,13,14,15,16,17,18,19,20,21,22,23];
+    const bottomRowOrder = [11,10,9,8,7,6,5,4,3,2,1,0];
+    const nonStackedLookup = Array(24).fill(null);
+    topRowOrder.forEach((idx, col) => { nonStackedLookup[idx] = { row: 'top', col }; });
+    bottomRowOrder.forEach((idx, col) => { nonStackedLookup[idx] = { row: 'bottom', col }; });
+
+    // Stacked layout splits the board into two vertical segments (left half on top).
+    const stackedUpperTop = [12,13,14,15,16,17];
+    const stackedUpperBottom = [11,10,9,8,7,6];
+    const stackedLowerTop = [18,19,20,21,22,23];
+    const stackedLowerBottom = [5,4,3,2,1,0];
+    const stackedLookup = Array(24).fill(null);
+    stackedUpperTop.forEach((idx, col) => { stackedLookup[idx] = { segment: 'upper', row: 'top', col }; });
+    stackedUpperBottom.forEach((idx, col) => { stackedLookup[idx] = { segment: 'upper', row: 'bottom', col }; });
+    stackedLowerTop.forEach((idx, col) => { stackedLookup[idx] = { segment: 'lower', row: 'top', col }; });
+    stackedLowerBottom.forEach((idx, col) => { stackedLookup[idx] = { segment: 'lower', row: 'bottom', col }; });
+
     function isStackedLayout() {
       const wrapperWidth = boardWrapper?.getBoundingClientRect().width || window.innerWidth;
       const basis = Math.min(window.innerWidth, wrapperWidth);
@@ -486,16 +506,17 @@
         if (localX >= leftHalfW && localX <= leftHalfW + barW) return { type:'bar' };
 
         const isTop = localY < ptH;
+        let col;
         if (localX < leftHalfW) {
-          const col = Math.floor(localX / ptW);
-          const idx = isTop ? 12 + col : col;
-          return { type:'point', index: idx };
+          col = Math.floor(localX / ptW);
+        } else {
+          const rightX = localX - leftHalfW - barW;
+          const colR = Math.floor(rightX / ptW);
+          if (colR < 0 || colR > 5) return null;
+          col = 6 + colR;
         }
 
-        const rightX = localX - leftHalfW - barW;
-        const colR = Math.floor(rightX / ptW);
-        if (colR < 0 || colR > 5) return null;
-        const idx = isTop ? 18 + colR : 6 + colR;
+        const idx = isTop ? topRowOrder[col] : bottomRowOrder[col];
         return { type:'point', index: idx };
       }
 
@@ -516,9 +537,9 @@
 
       let idx;
       if (inTopSegment) {
-        idx = isTopRow ? 12 + col : col; // left half indices
+        idx = isTopRow ? stackedUpperTop[col] : stackedUpperBottom[col];
       } else {
-        idx = isTopRow ? 18 + col : 6 + col; // right half indices
+        idx = isTopRow ? stackedLowerTop[col] : stackedLowerBottom[col];
       }
       return { type:'point', index: idx };
     }
@@ -579,16 +600,16 @@
 
         const radius = Math.min(ptW, ptH) * 0.28;
         function pointX(idx) {
-          const topRow = idx >= 12;
-          const pos = topRow ? idx - 12 : idx; // 0..11 in each row
-          if (pos < 6) return ox + pos * ptW + ptW/2;
-          const colR = pos - 6;
-          return ox + leftHalfW + barW + colR * ptW + ptW/2;
+          const info = nonStackedLookup[idx];
+          const col = info.col;
+          const xStart = col < 6 ? ox + col * ptW : ox + col * ptW + barW;
+          return xStart + ptW / 2;
         }
         function drawStack(idx) {
           const p = points[idx];
           if (!p.count) return;
-          const topRow = idx >= 12;
+          const info = nonStackedLookup[idx];
+          const topRow = info.row === 'top';
           const xCenter = pointX(idx);
           for (let n = 0; n < p.count; n++) {
             const yBase = topRow ? oy + radius + n * (radius*2 + stackGap) : oy + usableHeight - radius - n * (radius*2 + stackGap);
@@ -657,16 +678,11 @@
 
         const radius = Math.min(ptW, ptH) * 0.28;
         function pointCenter(idx) {
-          let col, upperSegment, isTopRow;
-          if (idx <= 5) { col = idx; upperSegment = true; isTopRow = false; }
-          else if (idx <= 11) { col = idx - 6; upperSegment = false; isTopRow = false; }
-          else if (idx <= 17) { col = idx - 12; upperSegment = true; isTopRow = true; }
-          else { col = idx - 18; upperSegment = false; isTopRow = true; }
-
-          const segY = upperSegment ? oy : oy + segmentH + barH;
-          const xCenter = ox + col * ptW + ptW/2;
-          const yBase = isTopRow ? (segY + radius) : (segY + segmentH - radius);
-          return { xCenter, yBase, isTopRow, segY };
+          const info = stackedLookup[idx];
+          const segY = info.segment === 'upper' ? oy : oy + segmentH + barH;
+          const xCenter = ox + info.col * ptW + ptW/2;
+          const yBase = info.row === 'top' ? (segY + radius) : (segY + segmentH - radius);
+          return { xCenter, yBase, isTopRow: info.row === 'top', segY };
         }
 
         function drawStack(idx) {
@@ -730,11 +746,10 @@
         targets.forEach(m => {
           if (m.to === 'bear') return;
           const idx = m.to;
-          const topRow = idx >= 12;
-          const pos = topRow ? idx - 12 : idx;
-          const inLeft = pos < 6;
-          const x0 = inLeft ? ox + pos * ptW : ox + leftHalfW + barW + (pos - 6) * ptW;
-          const y0 = topRow ? oy : oy + ptH;
+          const info = nonStackedLookup[idx];
+          const col = info.col;
+          const x0 = col < 6 ? ox + col * ptW : ox + col * ptW + barW;
+          const y0 = info.row === 'top' ? oy : oy + ptH;
           ctx.fillRect(x0, y0, ptW, ptH);
         });
       } else {
@@ -745,14 +760,10 @@
         targets.forEach(m => {
           if (m.to === 'bear') return;
           const idx = m.to;
-          let col, upperSegment, isTopRow;
-          if (idx <= 5) { col = idx; upperSegment = true; isTopRow = false; }
-          else if (idx <= 11) { col = idx - 6; upperSegment = false; isTopRow = false; }
-          else if (idx <= 17) { col = idx - 12; upperSegment = true; isTopRow = true; }
-          else { col = idx - 18; upperSegment = false; isTopRow = true; }
-          const segY = upperSegment ? oy : oy + segmentH + barH;
-          const x0 = ox + col * ptW;
-          const y0 = isTopRow ? segY : segY + ptH;
+          const info = stackedLookup[idx];
+          const segY = info.segment === 'upper' ? oy : oy + segmentH + barH;
+          const x0 = ox + info.col * ptW;
+          const y0 = info.row === 'top' ? segY : segY + ptH;
           ctx.fillRect(x0, y0, ptW, ptH);
         });
       }
