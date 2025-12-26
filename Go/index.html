@@ -80,14 +80,15 @@
     position: relative;
     padding: 18px;
     background: #0d121d;
-    height: 100%;
+    height: auto;
     display: flex;
+    flex: 1 1 auto;
     align-items: center;
     justify-content: center;
-    min-height: 0;
+    min-height: 60vh;
     overflow: hidden;
   }
-  #canvas-stack { position: relative; width: 100%; height: 100%; }
+  #canvas-stack { position: relative; width: 100%; height: 100%; min-height: inherit; }
   canvas {
     position: absolute;
     inset: 0;
@@ -123,8 +124,9 @@
     #ui-panel { border-left: none; border-top: 1px solid rgba(255,255,255,0.06); height: auto; max-height: none; overflow: visible; }
   }
   @media (max-width: 760px) {
-    body { padding: 0 10px 10px; }
-    #board-wrapper { padding: 12px; min-height: 62vh; }
+    body { padding: 0 2px; }
+    #app { max-width: none; border: 0; border-radius: 0; width: calc(100vw - 4px); margin: 0 auto; }
+    #board-wrapper { padding: 0; min-height: 62vh; }
     header { flex-direction: column; align-items: flex-start; }
   }
   .overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(8,10,16,0.82); backdrop-filter: blur(4px); z-index: 20; }
