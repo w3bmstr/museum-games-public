@@ -17,20 +17,18 @@
 			--board-b: #3d4154;
 		}
 		* { box-sizing: border-box; }
-		html, body { margin: 0; padding: 0; width: 100%; height: 100%; }
+		html, body { margin: 0; padding: 0; width: 100%; min-height: 100%; }
 		body {
 			background: radial-gradient(circle at 20% 20%, #121828, var(--bg) 42%);
 			font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
 			color: var(--text);
-			display: flex;
-			align-items: center;
-			justify-content: center;
+			display: block;
 			padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
-			overflow: hidden;
+			overflow-y: auto;
 		}
 		#app {
 			width: 100%;
-			height: 100vh;
+			min-height: 100vh;
 			max-width: 1500px;
 			background: var(--panel);
 			border: 1px solid rgba(255,255,255,0.06);
