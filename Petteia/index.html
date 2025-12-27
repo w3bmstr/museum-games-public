@@ -16,45 +16,47 @@
 			--board-a: #2d3040;
 			--board-b: #3d4154;
 		}
+
 		* { box-sizing: border-box; }
 		html, body { margin: 0; padding: 0; width: 100%; min-height: 100%; }
 		body {
 			background: radial-gradient(circle at 20% 20%, #121828, var(--bg) 42%);
 			font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
 			color: var(--text);
-			display: block;
 			padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
-			overflow-y: auto;
-		}
-		#app {
-			width: 100%;
 			min-height: 100vh;
-			max-width: 1500px;
+		}
+
+		#app {
+			max-width: 1400px;
+			margin: 0 auto;
+			min-height: 100vh;
+			display: flex;
+			flex-direction: column;
 			background: var(--panel);
 			border: 1px solid rgba(255,255,255,0.06);
 			border-radius: 16px;
-			overflow: visible; /* allow mobile to scroll past header */
 			box-shadow: 0 20px 60px rgba(0,0,0,0.35);
-			display: flex;
-			flex-direction: column;
-			margin: 0 auto;
+			overflow: hidden;
 		}
+
 		header {
 			position: sticky;
 			top: 0;
-			z-index: 5;
-			padding: calc(16px + env(safe-area-inset-top, 0px)) 18px 10px;
+			z-index: 10;
 			display: flex;
 			align-items: center;
 			justify-content: space-between;
 			gap: 12px;
-			background: linear-gradient(90deg, rgba(88,198,255,0.16), transparent);
-			border-bottom: 1px solid rgba(255,255,255,0.06);
-			box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+			padding: calc(14px + env(safe-area-inset-top, 0px)) 16px 12px;
+			background: linear-gradient(135deg, rgba(88,198,255,0.14), rgba(20,26,38,0.9));
+			border-bottom: 1px solid rgba(255,255,255,0.08);
+			box-shadow: 0 10px 28px rgba(0,0,0,0.35);
 		}
 		header h1 { margin: 0; font-size: 20px; letter-spacing: 0.4px; color: var(--accent-2); line-height: 1.2; }
-		header .subtitle { margin: 0; color: var(--muted); font-size: 13px; }
+		header .subtitle { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
 		.row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
 		button {
 			border: none;
 			border-radius: 8px;
@@ -65,29 +67,34 @@
 			color: #0c0f16;
 			transition: transform 0.1s ease, box-shadow 0.2s ease;
 		}
-		button.secondary { background: rgba(255,255,255,0.12); color: var(--text); }
+		button.secondary { background: rgba(255,255,255,0.14); color: var(--text); }
 		button.alt { background: var(--accent-2); color: #0c0f16; }
-		button:disabled { opacity: 0.5; cursor: not-allowed; }
+		button:disabled { opacity: 0.55; cursor: not-allowed; }
 		button:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 10px 22px rgba(0,0,0,0.25); }
+
 		main {
 			display: grid;
-			grid-template-columns: minmax(0,1fr) 320px;
-			gap: 0;
+			grid-template-columns: minmax(0, 1fr) 320px;
+			gap: 16px;
+			padding: 16px;
 			flex: 1;
 			min-height: 0;
-			overflow: visible; /* let content extend and body scroll */
 		}
+
 		#board-wrapper {
 			position: relative;
-			padding: 18px;
+			padding: 16px;
 			background: #0d121d;
-			height: auto;
+			border: 1px solid rgba(255,255,255,0.06);
+			border-radius: 14px;
+			box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04);
 			display: flex;
 			align-items: center;
 			justify-content: center;
-			min-height: 0;
+			min-height: 480px;
 			overflow: hidden;
 		}
+
 		#canvas-stack { position: relative; width: 100%; height: 100%; }
 		canvas {
 			position: absolute;
@@ -101,15 +108,18 @@
 		.layer-board { z-index: 0; pointer-events: none; }
 		.layer-pieces { z-index: 1; pointer-events: none; }
 		.layer-ui { z-index: 2; }
+
 		#ui-panel {
-			padding: 18px 18px 24px;
-			border-left: 1px solid rgba(255,255,255,0.06);
+			padding: 16px 16px 20px;
+			border: 1px solid rgba(255,255,255,0.06);
+			border-radius: 14px;
 			background: rgba(10,14,24,0.78);
 			height: 100%;
 			overflow-y: auto;
 			min-height: 0;
 		}
-		.section { margin-bottom: 16px; padding: 12px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; }
+
+		.section { margin-bottom: 14px; padding: 12px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; }
 		.section h3 { margin: 0 0 8px; font-size: 14px; letter-spacing: 0.6px; color: var(--muted); text-transform: uppercase; }
 		.pill { padding: 9px 12px; border-radius: 999px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); font-size: 13px; display: inline-flex; align-items: center; gap: 6px; }
 		.status-box { padding: 10px 12px; border-radius: 10px; background: rgba(88,198,255,0.1); border: 1px solid rgba(88,198,255,0.2); font-size: 14px; }
@@ -119,17 +129,7 @@
 		.history-panel.show { display: block; }
 		.history-panel .move-line { margin: 2px 0; }
 		.history-close { position: absolute; top: 6px; right: 6px; padding: 4px 8px; border: none; border-radius: 6px; background: rgba(255,255,255,0.12); color: var(--text); cursor: pointer; font-size: 11px; }
-		@media (max-width: 1040px) {
-			header { position: static; top: auto; }
-			main { display: flex; flex-direction: column; overflow: visible; }
-			#board-wrapper { flex: 0 0 auto; min-height: 60vh; height: auto; }
-			#ui-panel { border-left: none; border-top: 1px solid rgba(255,255,255,0.06); height: auto; max-height: none; }
-		}
-		@media (max-width: 760px) {
-			#board-wrapper { padding: 10px; min-height: 62vh; }
-			header { flex-direction: column; align-items: flex-start; padding: calc(14px + env(safe-area-inset-top, 0px)) 14px 10px; }
-			header h1 { font-size: 18px; }
-		}
+
 		.overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(8,10,16,0.82); backdrop-filter: blur(4px); z-index: 20; }
 		#rules-overlay { display: none; }
 		#rules-overlay.show { display: flex; }
@@ -140,6 +140,29 @@
 		.option-active { outline: 2px solid var(--accent); outline-offset: 1px; }
 		#history-overlay .dialog { width: min(600px, 92%); }
 		#start-overlay { display: flex; }
+
+		@media (max-width: 1040px) {
+			header { position: sticky; top: 0; }
+			main {
+				display: flex;
+				flex-direction: column;
+				gap: 14px;
+				padding: 14px;
+			}
+			#board-wrapper {
+				width: 100%;
+				min-height: 65vh;
+				aspect-ratio: 1 / 1;
+			}
+			#ui-panel { width: 100%; }
+		}
+
+		@media (max-width: 720px) {
+			header { flex-direction: column; align-items: flex-start; padding: calc(12px + env(safe-area-inset-top, 0px)) 14px 10px; }
+			header h1 { font-size: 18px; }
+			main { padding: 12px; gap: 12px; }
+			#board-wrapper { padding: 12px; min-height: 60vh; aspect-ratio: 4 / 5; }
+		}
 	</style>
 </head>
 <body>
