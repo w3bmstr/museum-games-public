@@ -15,14 +15,32 @@
 			font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
 			overflow: hidden;
 		}
-		#game-container { position: relative; width: 100vw; height: 100vh; overflow: hidden; background: radial-gradient(circle at 20% 20%, rgba(80,120,255,0.08), transparent 45%), radial-gradient(circle at 80% 70%, rgba(255,170,70,0.08), transparent 45%), #0c0d11; }
+		#game-container { display: flex; flex-direction: column; width: 100vw; height: 100vh; background: radial-gradient(circle at 20% 20%, rgba(80,120,255,0.08), transparent 45%), radial-gradient(circle at 80% 70%, rgba(255,170,70,0.08), transparent 45%), #0c0d11; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+		#stage { position: relative; flex: 1; min-height: 0; overflow: hidden; }
 		canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 		.layer-board { z-index: 0; pointer-events: none; }
 		.layer-pieces { z-index: 1; pointer-events: none; }
 		.layer-ui { z-index: 2; }
+		#title-bar {
+			margin: 10px 10px 0 10px;
+			z-index: 6;
+			display: flex;
+			flex-direction: column;
+			gap: 2px;
+			background: rgba(24,46,82,0.9);
+			border: 1px solid #1d2f4f;
+			border-radius: 12px;
+			padding: 12px 14px;
+			box-shadow: 0 10px 28px rgba(0,0,0,0.35);
+			backdrop-filter: blur(6px);
+			min-width: 240px;
+			text-align: left;
+		}
+		#title-bar .title { margin: 0; font-size: 20px; letter-spacing: 0.5px; color: #e7f1ff; font-weight: 750; }
+		#title-bar .subtitle { margin: 0; font-size: 13px; color: #bcd0ff; }
 		#hud {
 			position: absolute;
-			top: 10px;
+			top: 12px;
 			left: 10px;
 			z-index: 5;
 			display: flex;
@@ -48,11 +66,14 @@
 		.history-close { position: absolute; top: 6px; right: 6px; padding: 4px 8px; border: none; border-radius: 6px; background: #252a38; color: #e8e8ec; cursor: pointer; font-size: 11px; }
 		#btn-history { display: none; }
 		@media (max-width: 720px) {
-			#hud { position: fixed; top: auto; bottom: 0; left: 0; right: 0; flex-direction: row; gap: 6px; padding: 6px; background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.45) 40%); backdrop-filter: blur(8px); }
+			#stage { padding-bottom: calc(120px + env(safe-area-inset-bottom)); }
+			canvas { bottom: calc(120px + env(safe-area-inset-bottom)); height: calc(100% - calc(120px + env(safe-area-inset-bottom))); }
+			#hud { position: fixed; top: auto; bottom: 0; left: 0; right: 0; flex-direction: row; gap: 6px; padding: 6px; background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.45) 40%); backdrop-filter: blur(8px); padding-bottom: calc(6px + env(safe-area-inset-bottom)); }
 			#hud .panel { min-width: 0; flex: 1; }
 			#history { display: none; position: fixed; right: 8px; bottom: 78px; width: 82vw; max-width: 380px; max-height: 55vh; z-index: 12; background: rgba(0,0,0,0.85); border-radius: 10px; }
 			#history.show { display: block; }
 			#btn-history { display: inline-block; }
+			#title-bar { top: 12px; width: calc(100% - 16px); left: 8px; right: 8px; transform: none; }
 		}
 		#start-overlay {
 			position: absolute; inset: 0;
@@ -85,61 +106,68 @@
 </head>
 <body>
 <div id="game-container">
-	<div id="hud">
-		<div class="panel">
-			<h4>Status</h4>
-			<p id="turn-text">Turn: --</p>
-			<p id="ai-text">AI: --</p>
-			<p id="msg-text">Ready</p>
-			<p id="reserve-text">To place W:9 B:9</p>
-			<p id="piece-text">On board W:0 B:0</p>
-			<p id="lastmove-text">Last: --</p>
-		</div>
-		<div id="controls" class="panel">
-			<button id="btn-start" class="primary">New Game</button>
-			<button id="btn-reset">Reset</button>
-			<button id="btn-undo">Undo</button>
-			<button id="btn-history">History</button>
-			<button id="btn-rules">Rules</button>
-		</div>
-		<div id="history" class="panel history-panel">
-			<h4>Moves</h4>
-			<button id="btn-history-close" class="history-close">Close</button>
-			<div id="move-list"></div>
-		</div>
+	<div id="title-bar">
+		<p class="title">Nine Men's Morris</p>
+		<p class="subtitle">Place nine stones, form mills, capture to win.</p>
 	</div>
-
-	<div id="start-overlay">
-		<div id="start-card">
-			<h2>Nine Men's Morris</h2>
-			<p>Place nine pieces, make mills to capture. Reduce the opponent to 2 pieces or block them.</p>
-			<div class="btn-row">
-				<button id="btn-1p">1 Player (vs AI)</button>
-				<button id="btn-2p" class="secondary">2 Players</button>
+	<div id="stage">
+		<div id="hud">
+			<div class="panel">
+				<h4>Status</h4>
+				<p id="turn-text">Turn: --</p>
+				<p id="ai-text">AI: --</p>
+				<p id="msg-text">Ready</p>
+				<p id="moves-text">Moves: --</p>
+				<p id="reserve-text">To place W:9 B:9</p>
+				<p id="piece-text">On board W:0 B:0</p>
+				<p id="lastmove-text">Last: --</p>
 			</div>
-			<p style="margin-top:12px; margin-bottom:6px;">AI Difficulty</p>
-			<div class="btn-row">
-				<button id="btn-easy" class="secondary">Easy</button>
-				<button id="btn-med" class="active">Medium</button>
-				<button id="btn-hard" class="secondary">Hard</button>
+			<div id="controls" class="panel">
+				<button id="btn-start" class="primary">New Game</button>
+				<button id="btn-reset">Reset</button>
+				<button id="btn-undo">Undo</button>
+				<button id="btn-history">History</button>
+				<button id="btn-rules">Rules</button>
 			</div>
-			<p style="margin-top:12px; margin-bottom:6px;">Start</p>
-			<div class="btn-row" style="margin-top:8px;">
-				<button id="btn-start-overlay" class="primary">Start Game</button>
+			<div id="history" class="panel history-panel">
+				<h4>Moves</h4>
+				<button id="btn-history-close" class="history-close">Close</button>
+				<div id="move-list"></div>
 			</div>
 		</div>
-	</div>
 
-	<div id="rules-overlay">
-		<div id="rules-card">
-			<h3>Rules</h3>
-			<ul>
-				<li>Phase 1: players place pieces on empty points. Form a mill (three in a row) to remove an enemy piece (prefer one not in a mill).</li>
-				<li>Phase 2: when all pieces are placed, move along connected lines. If you have 3 pieces, you may fly to any empty point.</li>
-				<li>Win if the opponent has 2 or fewer pieces, or if they cannot move.</li>
-				<li>Controls: click a point to place or select; click a highlighted destination to move; click an enemy piece when prompted to capture. Keyboard: arrows move cursor, Enter/Space select/move, U undo, R reset, H rules.</li>
-			</ul>
-			<button id="close-rules">Close</button>
+		<div id="start-overlay">
+			<div id="start-card">
+				<h2>Nine Men's Morris</h2>
+				<p>Place nine pieces, make mills to capture. Reduce the opponent to 2 pieces or block them.</p>
+				<div class="btn-row">
+					<button id="btn-1p">1 Player (vs AI)</button>
+					<button id="btn-2p" class="secondary">2 Players</button>
+				</div>
+				<p style="margin-top:12px; margin-bottom:6px;">AI Difficulty</p>
+				<div class="btn-row">
+					<button id="btn-easy" class="secondary">Easy</button>
+					<button id="btn-med" class="active">Medium</button>
+					<button id="btn-hard" class="secondary">Hard</button>
+				</div>
+				<p style="margin-top:12px; margin-bottom:6px;">Start</p>
+				<div class="btn-row" style="margin-top:8px;">
+					<button id="btn-start-overlay" class="primary">Start Game</button>
+				</div>
+			</div>
+		</div>
+
+		<div id="rules-overlay">
+			<div id="rules-card">
+				<h3>Rules</h3>
+				<ul>
+					<li>Phase 1: players place pieces on empty points. Form a mill (three in a row) to remove an enemy piece (prefer one not in a mill).</li>
+					<li>Phase 2: when all pieces are placed, move along connected lines. If you have 3 pieces, you may fly to any empty point.</li>
+					<li>Win if the opponent has 2 or fewer pieces, or if they cannot move.</li>
+					<li>Controls: click a point to place or select; click a highlighted destination to move; click an enemy piece when prompted to capture. Keyboard: arrows move cursor, Enter/Space select/move, U undo, R reset, H rules.</li>
+				</ul>
+				<button id="close-rules">Close</button>
+			</div>
 		</div>
 	</div>
 </div>
@@ -178,6 +206,7 @@
 	];
 
 	const container = document.getElementById("game-container");
+	const stage = document.getElementById("stage");
 	const startOverlay = document.getElementById("start-overlay");
 	const btn1p = document.getElementById("btn-1p");
 	const btn2p = document.getElementById("btn-2p");
@@ -197,6 +226,7 @@
 	const turnText = document.getElementById("turn-text");
 	const aiText = document.getElementById("ai-text");
 	const msgText = document.getElementById("msg-text");
+	const movesText = document.getElementById("moves-text");
 	const reserveText = document.getElementById("reserve-text");
 	const pieceText = document.getElementById("piece-text");
 	const lastMoveText = document.getElementById("lastmove-text");
@@ -208,9 +238,9 @@
 	boardLayer.className = "layer-board";
 	piecesLayer.className = "layer-pieces";
 	uiLayer.className = "layer-ui";
-	container.appendChild(boardLayer);
-	container.appendChild(piecesLayer);
-	container.appendChild(uiLayer);
+	stage.appendChild(boardLayer);
+	stage.appendChild(piecesLayer);
+	stage.appendChild(uiLayer);
 
 	const layout = { width: 0, height: 0, size: 0, step: 0, offsetX: 0, offsetY: 0 };
 
@@ -226,6 +256,7 @@
 		legal: [],
 		gameOver: false,
 		winner: null,
+		message: "",
 		aiEnabled: true,
 		aiColor: DARK,
 		aiLevel: "medium",
@@ -248,13 +279,15 @@
 		state.legal = [];
 		state.gameOver = false;
 		state.winner = null;
+		state.message = "";
 		state.thinking = false;
 		updateHud();
 	}
 
 	function resize() {
-		layout.width = window.innerWidth;
-		layout.height = window.innerHeight;
+		const rect = stage.getBoundingClientRect();
+		layout.width = rect.width;
+		layout.height = rect.height;
 		[boardLayer, piecesLayer, uiLayer].forEach(c => {
 			c.width = layout.width * dpr;
 			c.height = layout.height * dpr;
@@ -263,11 +296,20 @@
 			const ctx = c.getContext("2d");
 			ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 		});
-		const size = Math.min(layout.width, layout.height) * 0.92;
-		layout.size = size;
-		layout.step = size / 6;
-		layout.offsetX = (layout.width - size) / 2;
-		layout.offsetY = (layout.height - size) / 2;
+		layout.size = Math.min(layout.width, layout.height) * 0.9;
+		layout.step = layout.size / 6;
+		layout.offsetX = (layout.width - layout.size) / 2;
+		layout.offsetY = (layout.height - layout.size) / 2;
+		render();
+	}
+
+	function endGame(winnerColor, message) {
+		state.gameOver = true;
+		state.winner = colorName(winnerColor);
+		state.message = message || `${state.winner} wins`;
+		state.thinking = false;
+		setBoardInput(false);
+		updateHud();
 		render();
 	}
 
@@ -533,35 +575,49 @@
 	}
 
 	function endTurn() {
-		if (checkWin(oppColor())) return;
+		if (state.gameOver) return;
+		const prev = state.turn;
 		state.turn = oppColor();
 		state.selected = null;
 		state.legal = [];
 		state.message = "";
+
+		if (checkBlockedCurrent(prev)) return;
 		updateHud();
 		render();
 		maybeRunAI();
 	}
 
+	function checkBlockedCurrent(prevPlayerColor) {
+		const moves = legalMoves(state.turn);
+		// If all pieces are placed and no moves, current player is blocked
+		if (state.toPlace[state.turn] === 0 && moves.length === 0) {
+			endGame(prevPlayerColor, `${colorName(prevPlayerColor)} wins (opponent blocked)`);
+			return true;
+		}
+		// If no moves but still in placement, pass the turn
+		if (moves.length === 0) {
+			state.message = "No legal moves (passing)";
+			updateHud();
+			render();
+			setTimeout(() => endTurn(), 300);
+			return true;
+		}
+		return false;
+	}
+
 	function checkWin(colorJustCaptured) {
 		const opp = colorJustCaptured;
 		const oppCount = pieceCount(opp);
-		if (oppCount <= 2) {
-			state.gameOver = true;
-			state.winner = colorName(state.turn);
-			state.message = `${state.winner} wins`;
-			updateHud();
-			render();
+		// Only declare win for reaching 2 when opponent has no reserves to place
+		if (state.toPlace[opp] === 0 && oppCount <= 2) {
+			endGame(state.turn, `${colorName(state.turn)} wins (opponent to 2 pieces)`);
 			return true;
 		}
 		if (state.toPlace[opp] === 0) {
 			const moves = legalMoves(opp);
 			if (!moves.length) {
-				state.gameOver = true;
-				state.winner = colorName(state.turn);
-				state.message = `${state.winner} wins (blocked)`;
-				updateHud();
-				render();
+				endGame(state.turn, `${colorName(state.turn)} wins (blocked)`);
 				return true;
 			}
 		}
@@ -569,9 +625,11 @@
 	}
 
 	function updateHud() {
+		const moves = legalMoves(state.turn);
 		turnText.textContent = `Turn: ${state.turn === LIGHT ? "WHITE" : "BLACK"}`;
 		aiText.textContent = state.aiEnabled ? `AI: ${state.aiLevel.toUpperCase()} (${state.aiColor === LIGHT ? "WHITE" : "BLACK"})` : "AI: OFF";
-		msgText.textContent = state.gameOver ? `${state.winner || ""}` : (state.message || "Ready");
+		msgText.textContent = state.gameOver ? (state.message || `${state.winner || ""}`) : (state.message || "Ready");
+		movesText.textContent = state.gameOver ? "Moves: --" : `Moves: ${moves.length}`;
 		reserveText.textContent = `To place W:${state.toPlace[LIGHT]} B:${state.toPlace[DARK]}`;
 		pieceText.textContent = `On board W:${pieceCount(LIGHT)} B:${pieceCount(DARK)}`;
 		if (state.lastMove) {
@@ -754,18 +812,28 @@
 		if (state.gameOver) return;
 		if (state.turn !== state.aiColor) return;
 		if (state.thinking) return;
+		if (checkBlockedCurrent(oppColor())) return;
 		state.thinking = true;
 		setTimeout(() => {
+			if (state.gameOver) { state.thinking = false; return; }
 			if (state.pendingCapture) {
 				const targets = legalCaptureTargets();
 				const pick = chooseCapture(targets);
 				capture(pick);
 			} else if (state.toPlace[state.turn] > 0) {
 				const mv = choosePlacement();
+				if (mv === null || mv === undefined) {
+					endGame(oppColor(), `${colorName(oppColor())} wins (no moves for ${colorName(state.turn)})`);
+					return;
+				}
 				applyMovePlace(mv);
 			} else {
 				const mv = chooseMove();
 				if (mv) applyMoveSlide(mv.from, mv.to);
+				else {
+					endGame(oppColor(), `${colorName(oppColor())} wins (no moves for ${colorName(state.turn)})`);
+					return;
+				}
 			}
 			state.thinking = false;
 			render();
@@ -852,7 +920,7 @@
 
 	function start1P() {
 		state.aiEnabled = true;
-		state.aiColor = DARK;
+		state.aiColor = DARK; // human as White, AI as Black
 		state.menuActive = false;
 		startOverlay.style.display = "none";
 		setBoardInput(true);
@@ -860,7 +928,7 @@
 		applyDifficultyUI();
 		render();
 		updateHud();
-		maybeRunAI();
+		if (state.turn === state.aiColor) maybeRunAI();
 	}
 
 	function start2P() {
